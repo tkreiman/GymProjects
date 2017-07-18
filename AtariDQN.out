@@ -1,0 +1,57 @@
++ source /usr/share/Modules/init/bash
+++ export -f module
+++ MODULESHOME=/usr/share/Modules
+++ export MODULESHOME
+++ '[' '' = '' ']'
+++ LOADEDMODULES=
+++ export LOADEDMODULES
+++ '[' /home/software/modulefiles = '' ']'
+++ '[' 4 -ge 3 ']'
+++ '[' -r /usr/share/Modules/init/bash_completion ']'
+++ . /usr/share/Modules/init/bash_completion
++++ complete -o default -F _module module
++ module add openmind/singularity/2.2.1
+++ /usr/bin/modulecmd bash add openmind/singularity/2.2.1
++ eval LOADEDMODULES=openmind/singularity/2.2.1 ';export' 'LOADEDMODULES;MODULEPATH=/cm/shared/modulefiles:/home/software/modulefiles' ';export' 'MODULEPATH;PATH=/cm/shared/openmind/singularity/singularity-2.2.1/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin' ';export' 'PATH;_LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1' ';export' '_LMFILES_;'
+++ LOADEDMODULES=openmind/singularity/2.2.1
+++ export LOADEDMODULES
+++ MODULEPATH=/cm/shared/modulefiles:/home/software/modulefiles
+++ export MODULEPATH
+++ PATH=/cm/shared/openmind/singularity/singularity-2.2.1/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
+++ export PATH
+++ _LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1
+++ export _LMFILES_
++ module add openmind/miniconda/4.0.5-python3
+++ /usr/bin/modulecmd bash add openmind/miniconda/4.0.5-python3
++ eval LOADEDMODULES=openmind/singularity/2.2.1:openmind/miniconda/4.0.5-python3 ';export' 'LOADEDMODULES;PATH=/cm/shared/openmind/miniconda/4.0.5-python3/bin:/cm/shared/openmind/singularity/singularity-2.2.1/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin' ';export' 'PATH;_LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1:/cm/shared/modulefiles/openmind/miniconda/4.0.5-python3' ';export' '_LMFILES_;'
+++ LOADEDMODULES=openmind/singularity/2.2.1:openmind/miniconda/4.0.5-python3
+++ export LOADEDMODULES
+++ PATH=/cm/shared/openmind/miniconda/4.0.5-python3/bin:/cm/shared/openmind/singularity/singularity-2.2.1/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
+++ export PATH
+++ _LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1:/cm/shared/modulefiles/openmind/miniconda/4.0.5-python3
+++ export _LMFILES_
++ module add openmind/cuda/8.0
+++ /usr/bin/modulecmd bash add openmind/cuda/8.0
++ eval LD_LIBRARY_PATH=/cm/shared/openmind/cuda/8.0/lib64:/cm/shared/openmind/cuda/8.0/lib ';export' 'LD_LIBRARY_PATH;LOADEDMODULES=openmind/singularity/2.2.1:openmind/miniconda/4.0.5-python3:openmind/cuda/8.0' ';export' 'LOADEDMODULES;PATH=/cm/shared/openmind/cuda/8.0/bin:/cm/shared/openmind/miniconda/4.0.5-python3/bin:/cm/shared/openmind/singularity/singularity-2.2.1/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin' ';export' 'PATH;_LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1:/cm/shared/modulefiles/openmind/miniconda/4.0.5-python3:/cm/shared/modulefiles/openmind/cuda/8.0' ';export' '_LMFILES_;'
+++ LD_LIBRARY_PATH=/cm/shared/openmind/cuda/8.0/lib64:/cm/shared/openmind/cuda/8.0/lib
+++ export LD_LIBRARY_PATH
+++ LOADEDMODULES=openmind/singularity/2.2.1:openmind/miniconda/4.0.5-python3:openmind/cuda/8.0
+++ export LOADEDMODULES
+++ PATH=/cm/shared/openmind/cuda/8.0/bin:/cm/shared/openmind/miniconda/4.0.5-python3/bin:/cm/shared/openmind/singularity/singularity-2.2.1/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
+++ export PATH
+++ _LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1:/cm/shared/modulefiles/openmind/miniconda/4.0.5-python3:/cm/shared/modulefiles/openmind/cuda/8.0
+++ export _LMFILES_
++ module add openmind/cudnn/8.0-5.1
+++ /usr/bin/modulecmd bash add openmind/cudnn/8.0-5.1
++ eval CPATH=/cm/shared/openmind/cudnn/cudnn-8.0-v5.1/include ';export' 'CPATH;LD_LIBRARY_PATH=/cm/shared/openmind/cudnn/cudnn-8.0-v5.1/lib64:/cm/shared/openmind/cuda/8.0/lib64:/cm/shared/openmind/cuda/8.0/lib' ';export' 'LD_LIBRARY_PATH;LOADEDMODULES=openmind/singularity/2.2.1:openmind/miniconda/4.0.5-python3:openmind/cuda/8.0:openmind/cudnn/8.0-5.1' ';export' 'LOADEDMODULES;_LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1:/cm/shared/modulefiles/openmind/miniconda/4.0.5-python3:/cm/shared/modulefiles/openmind/cuda/8.0:/cm/shared/modulefiles/openmind/cudnn/8.0-5.1' ';export' '_LMFILES_;'
+++ CPATH=/cm/shared/openmind/cudnn/cudnn-8.0-v5.1/include
+++ export CPATH
+++ LD_LIBRARY_PATH=/cm/shared/openmind/cudnn/cudnn-8.0-v5.1/lib64:/cm/shared/openmind/cuda/8.0/lib64:/cm/shared/openmind/cuda/8.0/lib
+++ export LD_LIBRARY_PATH
+++ LOADEDMODULES=openmind/singularity/2.2.1:openmind/miniconda/4.0.5-python3:openmind/cuda/8.0:openmind/cudnn/8.0-5.1
+++ export LOADEDMODULES
+++ _LMFILES_=/cm/shared/modulefiles/openmind/singularity/2.2.1:/cm/shared/modulefiles/openmind/miniconda/4.0.5-python3:/cm/shared/modulefiles/openmind/cuda/8.0:/cm/shared/modulefiles/openmind/cudnn/8.0-5.1
+++ export _LMFILES_
++ singularity pull shub://1858
+[31mERROR: Unknown command 'pull'
+(B[m
