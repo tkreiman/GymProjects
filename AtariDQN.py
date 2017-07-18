@@ -1010,12 +1010,19 @@ class NeuralNetwork:
            # Note that the learning-rate is also in this feed-dict.
 
            target_q = self.get_cloned_q_values(next_states_batch)
-           target_q_max = np.argmax(target_q, axis=1)
-           target_q = rewards_batch + ((1 - end_episode_batch) * (self.replay_memory.discount_factor * target_q))
+           #target_q_max = np.argmax(target_q, axis=1)
+           #target_q = np.array(rewards_batch) + ((1 - np.array(end_episode_batch)) * (self.replay_memory.discount_factor * np.array(target_q)))
+           #target_q = rewards_batch +  (self.replay_memory.discount_factor * target_q)
 
-           print("State Batch", len(state_batch))
-           print("Target Q", len(target_q))
-           print("Target Q[0]", target_q[0])
+           for i in range(len(end_episode_batch)):
+                if end_episode_batch[i]:
+                   shape = np.shape(target_q[i])
+                   target_q[i] = np.full(shape, rewards_batch[i])
+                else:
+                    target_q[i] = target_q[i] * self.replay_memory.discount_factor
+                    target_q[i] = target_q[i] + rewards_batch[i]
+
+
            feed_dict = {self.x: state_batch,
                         self.target_q_values: target_q,
                         self.learning_rate: learning_rate}
@@ -1246,7 +1253,7 @@ if __name__ == '__main__':
     update_paths(env_name=env_name)
     agent = Agent(env_name, training=True, render=False, target_network_update_frequency=2000)
     
-    agent.run(250)
+    agent.run(300)
     
     print("--------------------")
     print("--------------------")
