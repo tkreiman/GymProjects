@@ -6,7 +6,7 @@ Created on Mon Jul 10 15:21:59 2017
 @author: tobykreiman
 """
 
-import gym 
+import gym
 import numpy as np
 import scipy
 import tensorflow as tf
@@ -119,7 +119,9 @@ class Log:
         # Open and read the log-file.
         with open(self.file_path) as f:
             reader = csv.reader(f, delimiter="\t")
-            self.count_episodes, self.count_states, *data = zip(*reader)
+            #self.count_episodes, self.count_states, *data = zip(*reader)
+            self.count_episodes = 0
+            self.count_states = 0
 
         # Convert the remaining log-data to a NumPy float-array.
         self.data = np.array(data, dtype='float')
