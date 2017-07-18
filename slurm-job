@@ -18,4 +18,4 @@ singularity pull shub://1858
 singularity pull shub://xboix/singularity:tensorflow
 
 singularity exec -B /om:/om /om/user/tkreiman/singularity/xboix-singularity-tensorflow.img \
-python /om/user/tkreiman/OpenAIGymProjects/AtariDQN
+python /om/user/tkreiman/GymProjects/AtariDQN

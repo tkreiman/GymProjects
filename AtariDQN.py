@@ -10,13 +10,212 @@ import gym
 import numpy as np
 import scipy
 import tensorflow as tf
+import os
+import csv
+import sys
 
 #env = gym.make("Breakout-v0")
 
 possible_actions = 4
-state_shape = [4,84,84]
+state_shape = [84,84,4]
 
 last_4_frames = []
+state_4_frames = []
+
+
+checkpoint_base_dir = 'checkpoints_DQN/'
+
+# Combination of base-dir and environment-name.
+checkpoint_dir = None
+
+# Full path for the log-file for rewards.
+log_reward_path = None
+
+# Full path for the log-file for Q-values.
+log_q_values_path = None
+
+def update_paths(env_name):
+    """
+    Update the path-names for the checkpoint-dir and log-files.
+    
+    Call this after you have changed checkpoint_base_dir and
+    before you create the Neural Network.
+    
+    :param env_name:
+        Name of the game-environment you will use in OpenAI Gym.
+    """
+
+    global checkpoint_dir
+    global log_reward_path
+    global log_q_values_path
+    
+
+    # Add the environment-name to the checkpoint-dir.
+    checkpoint_dir = os.path.join(checkpoint_base_dir, env_name)
+
+    # Create the checkpoint-dir if it does not already exist.
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+
+    # File-path for the log-file for episode rewards.
+    log_reward_path = os.path.join(checkpoint_dir, "log_reward.txt")
+
+    # File-path for the log-file for Q-values.
+    log_q_values_path = os.path.join(checkpoint_dir, "log_q_values.txt")
+
+
+def print_progress(msg):
+    """
+    Print progress on a single line and overwrite the line.
+    Used during optimization.
+    """
+
+    sys.stdout.write("\r" + msg)
+    sys.stdout.flush()
+
+
+class Log:
+    """
+    Base-class for logging data to a text-file during training.
+    It is possible to use TensorFlow / TensorBoard for this,
+    but it is quite awkward to implement, as it was intended
+    for logging variables and other aspects of the TensorFlow graph.
+    We want to log the reward and Q-values which are not in that graph.
+    """
+
+    def __init__(self, file_path):
+        """Set the path for the log-file. Nothing is saved or loaded yet."""
+
+        # Path for the log-file.
+        self.file_path = file_path
+
+        # Data to be read from the log-file by the _read() function.
+        self.count_episodes = None
+        self.count_states = None
+        self.data = None
+
+    def _write(self, count_episodes, count_states, msg):
+        """
+        Write a line to the log-file. This is only called by sub-classes.
+        
+        :param count_episodes:
+            Counter for the number of episodes processed during training.
+        :param count_states: 
+            Counter for the number of states processed during training.
+        :param msg:
+            Message to write in the log.
+        """
+
+        with open(file=self.file_path, mode='a', buffering=1) as file:
+            msg_annotated = "{0}\t{1}\t{2}\n".format(count_episodes, count_states, msg)
+            file.write(msg_annotated)
+
+    def _read(self):
+        """
+        Read the log-file into memory so it can be plotted.
+        It sets self.count_episodes, self.count_states and self.data
+        """
+
+        # Open and read the log-file.
+        with open(self.file_path) as f:
+            reader = csv.reader(f, delimiter="\t")
+            self.count_episodes, self.count_states, *data = zip(*reader)
+
+        # Convert the remaining log-data to a NumPy float-array.
+        self.data = np.array(data, dtype='float')
+
+
+class LogReward(Log):
+    """Log the rewards obtained for episodes during training."""
+
+    def __init__(self):
+        # These will be set in read() below.
+        self.episode = None
+        self.mean = None
+
+        # Super-class init.
+        Log.__init__(self, file_path=log_reward_path)
+
+    def write(self, count_episodes, count_states, reward_episode, reward_mean):
+        """
+        Write the episode and mean reward to file.
+        
+        :param count_episodes:
+            Counter for the number of episodes processed during training.
+        :param count_states: 
+            Counter for the number of states processed during training.
+        :param reward_episode:
+            Reward for one episode.
+        :param reward_mean:
+            Mean reward for the last e.g. 30 episodes.
+        """
+
+        msg = "{0:.1f}\t{1:.1f}".format(reward_episode, reward_mean)
+        self._write(count_episodes=count_episodes, count_states=count_states, msg=msg)
+
+    def read(self):
+        """
+        Read the log-file into memory so it can be plotted.
+        It sets self.count_episodes, self.count_states, self.episode and self.mean
+        """
+
+        # Read the log-file using the super-class.
+        self._read()
+
+        # Get the episode reward.
+        self.episode = self.data[0]
+
+        # Get the mean reward.
+        self.mean = self.data[1]
+
+
+class LogQValues(Log):
+    """Log the Q-Values during training."""
+
+    def __init__(self):
+        # These will be set in read() below.
+        self.min = None
+        self.mean = None
+        self.max = None
+        self.std = None
+
+        # Super-class init.
+        Log.__init__(self, file_path=log_q_values_path)
+
+    def write(self, count_episodes, count_states, q_values):
+        """
+        Write basic statistics for the Q-values to file.
+        :param count_episodes:
+            Counter for the number of episodes processed during training.
+        :param count_states: 
+            Counter for the number of states processed during training.
+        :param q_values:
+            Numpy array with Q-values from the replay-memory.
+        """
+
+        msg = "{0:.3f}\t{1:.3f}\t{2:.3f}\t{3:.3f}".format(np.min(q_values),
+                                                          np.mean(q_values),
+                                                          np.max(q_values),
+                                                          np.std(q_values))
+
+        self._write(count_episodes=count_episodes,
+                    count_states=count_states,
+                    msg=msg)
+
+    def read(self):
+        """
+        Read the log-file into memory so it can be plotted.
+        It sets self.count_episodes, self.count_states, self.min / mean / max / std.
+        """
+
+        # Read the log-file using the super-class.
+        self._read()
+
+        # Get the logged statistics for the Q-values.
+        self.min = self.data[0]
+        self.mean = self.data[1]
+        self.max = self.data[2]
+        self.std = self.data[3]
 
 class LinearControlSignal:
     """
@@ -202,6 +401,8 @@ class ReplayMemory:
 
         # Whether the episode had ended (aka. game over) in each state.
         self.end_episode = np.zeros(shape=size, dtype=np.bool)
+        
+        self.next_states = np.zeros(shape=[size] + state_shape, dtype=np.uint8)
 
         # Estimation errors for the Q-values. This is used to balance
         # the sampling of batches for training the Neural Network,
@@ -233,7 +434,7 @@ class ReplayMemory:
         """Reset the replay-memory so it is empty."""
         self.num_used = 0
 
-    def add(self, state, q_values, action, reward, end_life, end_episode):
+    def add(self, state, q_values, action, reward, end_life, end_episode, next_state):
         """
         Add an observed state from the game-environment, along with the
         estimated Q-values, action taken, observed reward, etc. 
@@ -269,6 +470,7 @@ class ReplayMemory:
             self.actions[k] = action
             self.end_life[k] = end_life
             self.end_episode[k] = end_episode
+            self.next_states[k] = next_state
 
             # Note that the reward is limited. This is done to stabilize
             # the training of the Neural Network.
@@ -398,8 +600,11 @@ class ReplayMemory:
         # Get the batches of states and Q-values.
         states_batch = self.states[idx]
         q_values_batch = self.q_values[idx]
+        next_states_batch = self.next_states[idx]
+        rewards_batch = self.rewards[idx]
+        end_episode_batch = self.end_episode[idx]
 
-        return states_batch, q_values_batch
+        return states_batch, q_values_batch, next_states_batch, rewards_batch, end_episode_batch
 
     def all_batches(self, batch_size=128):
         """
@@ -530,44 +735,69 @@ def process_image(image):
     return img
 
 
+def convert_shape_last_4_frames(last_4_frames):
+    converted = np.zeros([84,84,4])
+    for i in range(4):
+        for j in range(84):
+            for g in range(84):
+               converted[j][g][i] = last_4_frames[i][j][g]
 
+    return converted
 
 class NeuralNetwork:
     
     def __init__(self, replay_memory, num_actions):
-        self.replay_memory = replay_Memory
+        self.replay_memory = replay_memory
         self.num_actions = num_actions
         
-        self.x = tf.placeholder(tf.float32, shape=[4,84,84])
+        self.x = tf.placeholder(tf.float32, shape=[None,84,84,4])
         self.target_q_values = tf.placeholder(tf.float32, shape=[None, possible_actions])
 
-        self.learning_rate = tf.placeholder(tf.float32. shape=[])
+        self.learning_rate = tf.placeholder(tf.float32, shape=[])
+        
+        self.checkpoint_path = os.path.join(checkpoint_dir, "checkpoint")
             
         #Create Deep Neural Network
         # 3 convolutional layers
         # 2 fully connected layers
         init = tf.truncated_normal_initializer(mean=0.0, stddev=2e-2)
 
-
         padding = 'SAME'
+        
+        self.count_states = tf.Variable(initial_value=0,
+                                        trainable=False, dtype=tf.int64,
+                                        name='count_states')
+        # Similarly, this is the counter for the number of episodes.
+        self.count_episodes = tf.Variable(initial_value=0,
+                                          trainable=False, dtype=tf.int64,
+                                          name='count_episodes')
+        # TensorFlow operation for increasing count_states.
+        self.count_states_increase = tf.assign(self.count_states, self.count_states + 1)
+        # TensorFlow operation for increasing count_episodes.
+        self.count_episodes_increase = tf.assign(self.count_episodes, self.count_episodes + 1)
+
+        
+        self.saver = tf.train.Saver()
+        self.sess = tf.Session()
         # Activation function for all convolutional and fully-connected
         # layers, except the last.
         activation = tf.nn.relu
 
         net = self.x
 
+        #Values of the Neural Network are modified from teh one used by Deep Mind
         # First convolutional layer.
         net = tf.layers.conv2d(inputs=net, name='layer_conv1',
-                       filters=16, kernel_size=3, strides=2,
+                       filters=32, kernel_size=8, strides=4,
                        padding=padding,
                        kernel_initializer=init, activation=activation)
 
         # Second convolutional layer.
         net = tf.layers.conv2d(inputs=net, name='layer_conv2',
-                               filters=32, kernel_size=3, strides=2,
+                               filters=64, kernel_size=4, strides=2,
                                padding=padding,
                                kernel_initializer=init, activation=activation)
-        
+
         # Third convolutional layer.
         net = tf.layers.conv2d(inputs=net, name='layer_conv3',
                                filters=64, kernel_size=3, strides=1,
@@ -576,38 +806,152 @@ class NeuralNetwork:
         
         # Flatten output of the last convolutional layer so it can
         # be input to a fully-connected (aka. dense) layer.
+
         net = tf.contrib.layers.flatten(net)
-        
+
         # First fully-connected (aka. dense) layer.
-        net = tf.layers.dense(inputs=net, name='layer_fc1', units=1024,
+        net = tf.layers.dense(inputs=net, name='layer_fc1', units=512,
                               kernel_initializer=init, activation=activation)
         
         # Second fully-connected layer.
         net = tf.layers.dense(inputs=net, name='layer_output', units=possible_actions,
-                              kernel_initializer=init, activation=activation)
+                              kernel_initializer=init, activation=None)
         # The output of the Neural Network is the estimated Q-values
         # for each possible action in the game-environment.
         self.predicted_q_values = net
+
+        #Original Neural Net
+
+        #1st convolutional layer: 32 filters 8x8, stride 4
+        #2nd convolutional layer: 64 filters 4x4, stride 2
+        #3rd convolutional layer: 64 filters 3x3, stride 1
+        #4th fully connected layer with 512 units
+        #5th output fully connected layer with output for each valid of action
         
         
         # L2 loss
-        squared_error = tf.square(predicted_q_values - target_q_values)
-        sum_squared_error = tf.reduce_sum(squared_error, axis=1)
+        squared_error = tf.square(self.predicted_q_values - self.target_q_values)
+        sum_squared_error = tf.reduce_sum(squared_error, reduction_indices=[1])
         self.loss = tf.reduce_mean(sum_squared_error)       
 
-        self.train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
+        # Testing different optimizers
+        # self.train_step = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
+        self.train_step = tf.train.RMSPropOptimizer(self.learning_rate).minimize(self.loss)
 
 
 
-        self.sess = tf.Session()
+        self.load_checkpoint()
+        self.clone_network()
 
 #replay_memory = ReplayMemory(200000, possible_actions)
     #Takes last 4 frames as input
-    def get_q_values(states):
-        values = sess.run(self.predicted_q_values, feed_dict={self.x: states})
+    def get_q_values(self, states):
+        values = self.sess.run(self.predicted_q_values, feed_dict={self.x: states})
     
         return values
+    
+    def get_cloned_q_values(self, states):
+        values = self.sess.run(self.clone_model, feed_dict={self.x: states})
+        return values
 
+    def clone_network(self):
+        conv1_weights = self.get_weights_variable("layer_conv1")
+        conv2_weights = self.get_weights_variable("layer_conv2")
+        conv3_weights = self.get_weights_variable("layer_conv3")
+        fc1_weights = self.get_weights_variable("layer_fc1")
+        output_weights = self.get_weights_variable("layer_output")
+
+        layer_conv1 = tf.nn.relu(tf.nn.conv2d(self.x, conv1_weights, strides=[1, 4, 4, 1], padding='SAME'))
+
+        layer_conv2 = tf.nn.relu(tf.nn.conv2d(layer_conv1, conv2_weights, strides=[1, 2, 2, 1], padding='SAME'))
+
+        layer_conv3 = tf.nn.relu(tf.nn.conv2d(layer_conv2, conv3_weights, strides=[1, 1, 1, 1], padding='SAME'))
+
+        flattened = tf.contrib.layers.flatten(layer_conv3)
+        layer_fc1 = tf.nn.relu(tf.matmul(flattened, fc1_weights))
+        layer_output = tf.nn.relu(tf.matmul(layer_fc1, output_weights))
+
+        
+        self.clone_model = layer_output
+
+    
+    def get_weights_variable(self, layer_name):
+        """
+        Return the variable inside the TensorFlow graph for the weights
+        in the layer with the given name.
+        Note that the actual values of the variables are not returned,
+        you must use the function get_variable_value() for that.
+        """
+        # The tf.layers API uses this name for the weights in a conv-layer.
+        variable_name = 'kernel'
+
+        with tf.variable_scope(layer_name, reuse=True):
+            variable = tf.get_variable(variable_name)
+
+        return variable
+
+    
+    def load_checkpoint(self):
+        """
+        Load all variables of the TensorFlow graph from a checkpoint.
+        If the checkpoint does not exist, then initialize all variables.
+        """
+        self.sess.run(tf.global_variables_initializer())
+        try:
+            print("Trying to restore last checkpoint ...")
+
+            # Use TensorFlow to find the latest checkpoint - if any.
+            last_chk_path = tf.train.latest_checkpoint(checkpoint_dir=checkpoint_dir)
+
+            # Try and load the data in the checkpoint.
+            self.saver.restore(self.sess, save_path=last_chk_path)
+
+            # If we get to this point, the checkpoint was successfully loaded.
+            print("Restored checkpoint from:", last_chk_path)
+        except:
+            # If the above failed for some reason, simply
+            # initialize all the variables for the TensorFlow graph.
+            print("Failed to restore checkpoint from:", checkpoint_dir)
+            print("Initializing variables instead.")
+            self.sess.run(tf.global_variables_initializer())
+
+    def save_checkpoint(self, current_iteration):
+        """Save all variables of the TensorFlow graph to a checkpoint."""
+
+        self.saver.save(self.sess,
+                        save_path=self.checkpoint_path,
+                        global_step=current_iteration)
+        
+        print("Saved checkpoint.")
+    
+    def get_count_states(self):
+        """
+        Get the number of states that has been processed in the game-environment.
+        This is not used by the TensorFlow graph. It is just a hack to save and
+        reload the counter along with the checkpoint-file.
+        """
+        return self.sess.run(self.count_states)
+
+    def get_count_episodes(self):
+        """
+        Get the number of episodes that has been processed in the game-environment.
+        """
+        return self.sess.run(self.count_episodes)
+
+    def increase_count_states(self):
+        """
+        Increase the number of states that has been processed
+        in the game-environment.
+        """
+        return self.sess.run(self.count_states_increase)
+
+    def increase_count_episodes(self):
+        """
+        Increase the number of episodes that has been processed
+        in the game-environment.
+        """
+        return self.sess.run(self.count_episodes_increase)
+        
     def train(self, min_epochs=1.0, max_epochs=10,
                 batch_size=128, loss_limit=0.015,
                 learning_rate=1e-3):
@@ -652,15 +996,28 @@ class NeuralNetwork:
        max_iterations = int(iterations_per_epoch * max_epochs)
        # Buffer for storing the loss-values of the most recent batches.
        loss_history = np.zeros(100, dtype=float)
+       clone_model_update_frequency = int(max_iterations / 10)
        for i in range(max_iterations):
+
+           if i % clone_model_update_frequency == 0:
+               self.clone_network()
+
            # Randomly sample a batch of states and target Q-values
            # from the replay-memory. These are the Q-values that we
            # want the Neural Network to be able to estimate.
-           state_batch, q_values_batch = self.replay_memory.random_batch()
+           state_batch, q_values_batch, next_states_batch, rewards_batch, end_episode_batch = self.replay_memory.random_batch()
            # Create a feed-dict for inputting the data to the TensorFlow graph.
            # Note that the learning-rate is also in this feed-dict.
+
+           target_q = self.get_cloned_q_values(next_states_batch)
+           target_q_max = np.argmax(target_q, axis=1)
+           target_q = rewards_batch + ((1 - end_episode_batch) * (self.replay_memory.discount_factor * target_q))
+
+           print("State Batch", len(state_batch))
+           print("Target Q", len(target_q))
+           print("Target Q[0]", target_q[0])
            feed_dict = {self.x: state_batch,
-                        self.target_q_values: q_values_batch,
+                        self.target_q_values: target_q,
                         self.learning_rate: learning_rate}
            # Perform one optimization step and get the loss-value.
            loss_val, _ = self.sess.run([self.loss, self.train_step],
@@ -675,19 +1032,25 @@ class NeuralNetwork:
            pct_epoch = i / iterations_per_epoch
            msg = "\tIteration: {0} ({1:.2f} epoch), Batch loss: {2:.4f}, Mean loss: {3:.4f}"
            msg = msg.format(i, pct_epoch, loss_val, loss_mean)
+           print_progress(msg)
+
            # Stop the optimization if we have performed the required number
            # of iterations and the loss-value is sufficiently low.
            if i > min_iterations and loss_mean < loss_limit:
                break
        # Print newline.
        print()
+       
+       
    
 
 class Agent:
     
-    def __init__(self, env_name, training, render=False):
+    
+    def __init__(self, env_name, training, target_network_update_frequency, render=False):
         self.env = gym.make(env_name)
         self.num_actions = self.env.action_space.n
+        self.target_network_update_frequency = target_network_update_frequency
         self.training = training
         self.render = render
         self.epsilon_greedy = EpsilonGreedy(start_value=1.0,
@@ -695,6 +1058,8 @@ class Agent:
                                             num_iterations=1e6,
                                             num_actions=self.num_actions,
                                             epsilon_testing=0.01)
+        self.log_q_values = LogQValues()
+        self.log_reward = LogReward()
         if self.training:
             # The following control-signals are only used during training.
 
@@ -768,18 +1133,29 @@ class Agent:
     
     def run(self, num_episodes=None):
         global last_4_frames
+        global state_4_frames
         #To reset for first run
         end_episode = True
-        count_episodes = 0
-        count_states = 0
+        count_episodes = self.model.get_count_episodes()
+        count_states = self.model.get_count_states()
         reward_episode = 0
+        
+        num_episodes += count_episodes
+        
         while count_episodes <= num_episodes:
+            
+            if count_states % self.target_network_update_frequency == 0:
+                self.model.clone_network()
+            
             if end_episode:
+                last_4_frames = []
+                state_4_frames = []
                 img = self.env.reset()
                 img = process_image(img)
                 last_4_frames.append(img)
+                reward_episode = 0
                 
-                count_episodes += 1
+                count_episodes = self.model.increase_count_episodes()
                 num_lives = self.get_lives()
                 
                 # Populate state with first 4 frames
@@ -790,17 +1166,21 @@ class Agent:
                 
                 last_4_frames = list(reversed(last_4_frames))
             
-            state = last_4_frames
-            q_values = self.model.get_q_values(state)
+            # state = convert_shape_last_4_frames(last_4_frames)
+            state_4_frames = convert_shape_last_4_frames(last_4_frames)
+            #print("Last 4 frames: " + str(last_4_frames[0][50][50]) + " State 4 Frames: " + str(state_4_frames[50][50][0]))
+
+            q_values = self.model.get_q_values([state_4_frames])
             
             action, epsilon = self.epsilon_greedy.get_action(q_values=q_values, iteration=count_states, training=self.training)
             
-            img, reward, done, info = self.env.step(action)
+            img, reward, end_episode, info = self.env.step(action)
             img = process_image(img)
             
             # Replace oldest frame with new image
             new_state = last_4_frames[len(last_4_frames) - 1:] + last_4_frames[0:len(last_4_frames) - 1]
             new_state[0] = img
+            new_state_processed = convert_shape_last_4_frames(new_state)
             
             reward_episode += reward
             
@@ -809,20 +1189,22 @@ class Agent:
             end_life = (num_lives_new < num_lives)
             num_lives = num_lives_new
             
-            count_states += 1
+            count_states = self.model.increase_count_states()
             
             if not self.training and self.render:
                 self.env.render()
             
             if self.training:
-                self.replay_memory.add(last_4_frames, q_values=q_values, action=action,reward=reward,end_life=end_life,end_episode=done)
+                self.replay_memory.add(state_4_frames, q_values=q_values, action=action,
+                                       reward=reward,end_life=end_life,end_episode=end_episode, 
+                                       next_state=new_state_processed)
                 
                 use_fraction = self.replay_fraction.get_value(iteration=count_states)
                 
                 if self.replay_memory.is_full() or self.replay_memory.used_fraction() > use_fraction:
                     # Train neural network on memory
                     self.replay_memory.update_all_q_values()
-                    
+                    self.log_q_values.write(count_episodes=count_episodes, count_states=count_states, q_values=self.replay_memory.q_values)
                     learning_rate = self.learning_rate_control.get_value(iteration=count_states)
                     loss_limit = self.loss_limit_control.get_value(iteration=count_states)
                     max_epochs = self.max_epochs_control.get_value(iteration=count_states)
@@ -831,43 +1213,42 @@ class Agent:
                     # improve the estimates for the Q-values.
                     # This will sample random batches from the replay-memory.
                     self.model.train(learning_rate=learning_rate, loss_limit=loss_limit, max_epochs=max_epochs)
-                    
+                    self.model.save_checkpoint(count_states)
                     self.replay_memory.reset()
-                    
-                    if end_episode:
-                        # Add the episode's reward to a list for calculating statistics.
-                        self.episode_rewards.append(reward_episode)
-                        
-                    if len(self.episode_rewards) == 0:
-                        # The list of rewards is empty.
-                        reward_mean = 0.0
-                    else:
-                        reward_mean = np.mean(self.episode_rewards[-30:])
+
+            if end_episode:
+                # Add the episode's reward to a list for calculating statistics.
+                self.episode_rewards.append(reward_episode)
+
+            if len(self.episode_rewards) == 0:
+                # The list of rewards is empty.
+                reward_mean = 0.0
+            else:
+                reward_mean = np.mean(self.episode_rewards[-30:])
         
-                    if self.training and end_episode:
-        
-                        # Print reward to screen.
-                        msg = "{0:4}:{1}\t Epsilon: {2:4.2f}\t Reward: {3:.1f}\t Episode Mean: {4:.1f}"
-                        print(msg.format(count_episodes, count_states, epsilon,
+            if self.training and end_episode:
+                self.log_reward.write(count_episodes=count_episodes,count_states=count_states,reward_episode=reward_episode,reward_mean=reward_mean)
+                # Print reward to screen.
+                msg = "{0:4}:{1}\t Epsilon: {2:4.2f}\t Reward: {3:.1f}\t Episode Mean: {4:.1f}"
+                print(msg.format(count_episodes, count_states, epsilon,
                                          reward_episode, reward_mean))
-                    elif not self.training and (reward != 0.0 or end_life or end_episode):
-                        # Print Q-values and reward to screen.
-                        msg = "{0:4}:{1}\tQ-min: {2:5.3f}\tQ-max: {3:5.3f}\tLives: {4}\tReward: {5:.1f}\tEpisode Mean: {6:.1f}"
-                        print(msg.format(count_episodes, count_states, np.min(q_values),
-                                         np.max(q_values), num_lives, reward_episode, reward_mean))
-                        
+            elif not self.training and (reward != 0.0 or end_life or end_episode):
+                # Print Q-values and reward to screen.
+                msg = "{0:4}:{1}\tQ-min: {2:5.3f}\tQ-max: {3:5.3f}\tLives: {4}\tReward: {5:.1f}\tEpisode Mean: {6:.1f}"
+                print(msg.format(count_episodes, count_states, np.min(q_values),
+                np.max(q_values), num_lives, reward_episode, reward_mean))
+            last_4_frames = new_state
 
 
 if __name__ == '__main__':
     
-    agent = Agent("Breakout-v0", training=True, render=False)
+    env_name = "Breakout-v0"
+    update_paths(env_name=env_name)
+    agent = Agent(env_name, training=True, render=False, target_network_update_frequency=2000)
     
-    agent.run(2000)
+    agent.run(250)
     
     print("--------------------")
-    print("Done Training")
-    print("Done Training")
-    print("Done Training")
     print("--------------------")
     
     agent.reset_episode_rewards()
@@ -875,7 +1256,7 @@ if __name__ == '__main__':
     agent.training = False
     agent.render = True
     
-    agent.run(30)
+    agent.run(1)
     
     rewards = agent.episode_rewards
     print("Rewards for {0} episodes:".format(len(rewards)))
