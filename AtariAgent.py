@@ -343,10 +343,17 @@ class Agent:
         self.random_restart()
         self.env.restart()
         # Play certain number of episodes
+        rewards = []
         for i in range(self.episodes):
             terminal = False
+            total_reward = 0
             while not terminal:
                 state, action, reward, obs, terminal = self.observe(self.eps)
+                total_reward += reward
+            rewards.append(total_reward)
+
+        print("Average reward for " + str(self.episodes) + " games:")
+        print(np.mean(rewards))
 
     def copy_weights(self, sess):
         # Clone the prediction network to form the target network (copy the weights)
@@ -470,7 +477,7 @@ if __name__ == "__main__":
     agent = Agent(env, 100, 10000, 500000, 10000, 4, 0.99, 1, 0.1, 1000000, 50000, 30, 32, ckpt_dir, env_name, 0.00025, 20000, 84, 84, 100000, 0.95, 4)
 
     Trainer(agent).run()
-    env.render = True
+    #env.render = True
 
     agent.play()
 
