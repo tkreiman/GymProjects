@@ -474,8 +474,12 @@ class ReplayMemory:
         self.memory.append([state, action, reward, next_state, terminal])
 
     def get_sample(self):
-        #return random.sample(self.memory, self.batch_size)
-        return np.random.choice(self.memory, self.batch_size, replace=False)
+        return random.sample(list(self.memory), self.batch_size)
+        #return np.random.choice(self.memory, self.batch_size, replace=False)
+        sample = []
+        #for i in range(self.batch_size):
+         #   idx = random.randrange(0, len(self.memory))
+
 
     def reset(self):
         self.memory.clear()
