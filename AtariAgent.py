@@ -357,13 +357,16 @@ class Agent:
         self.env.restart()
         # Play certain number of episodes
         rewards = []
-        for i in range(self.episodes):
-            terminal = False
-            total_reward = 0
-            while not terminal:
-                state, action, reward, obs, terminal = self.observe(self.epsilon_test)
-                total_reward += reward
-            rewards.append(total_reward)
+        with tf.Session as sess:
+            sess.run(tf.global_variables_initializer())
+            agent.restore(self.saver, sess)
+            for i in range(self.episodes):
+                terminal = False
+                total_reward = 0
+                while not terminal:
+                    state, action, reward, obs, terminal = self.observe(self.epsilon_test)
+                    total_reward += reward
+                rewards.append(total_reward)
 
         print()
         print("--------------------------------------------------")
