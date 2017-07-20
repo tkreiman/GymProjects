@@ -352,6 +352,8 @@ class Agent:
                 total_reward += reward
             rewards.append(total_reward)
 
+        print()
+        print("--------------------------------------------------")
         print("Average reward for " + str(self.episodes) + " games:")
         print(np.mean(rewards))
 
@@ -406,10 +408,17 @@ class Trainer:
             sample_failure = 0
             print("\n Starting Training")
 
+            reward_episode = 0
+            reward_history = []
             for i in range(self.agent.train_steps):
                 lr = self.agent.train_eps(1)
 
                 state, action, reward, next_state, terminal = self.agent.observe(lr)
+                reward_episode += reward
+
+                if terminal:
+                    reward_history.append(reward_episode)
+                    reward_episode = 0
 
                 if len(self.agent.memory) > self.agent.batch_size and (i + 1) % self.agent.update_freq == 0:
                     sample_success, sample_failure, loss = self.agent.do_minibatch(sess, sample_success, sample_failure)
@@ -426,16 +435,21 @@ class Trainer:
                 if (i + 1) % self.agent.save_weights == 0:
                     self.agent.save(self.saver, sess, i + 1)
 
-                if (i + 1) % self.agent.batch_size == 0:
-                    avg_loss = total_loss / self.agent.batch_size
+                if (i + 1) % (self.agent.batch_size * 3) == 0:
+                    avg_loss = total_loss / (self.agent.batch_size * 3)
+                    if len(reward_history) == 0:
+                        average_reward = 0.0
+                    else:
+                        average_reward = np.mean(reward_history[-30:])
                     print("\nTraining step: ", i + 1,
                     "\nmemory size: ", len(self.agent.memory),
                     "\nLearning rate: ", lr,
-                    "\nSuccesses: ", successes,
-                    "\nFailures: ", failures,
+                    #"\nSuccesses: ", successes,
+                    #"\nFailures: ", failures,
                     "\nSample successes: ", sample_success,
                     "\nSample failures: ", sample_failure,
-                    "\nAverage batch loss: ", avg_loss)
+                    "\nAverage batch loss: ", avg_loss,
+                    "\nAverage Reward:", average_reward)
 
                     total_loss = 0
 
@@ -466,7 +480,6 @@ class ReplayMemory:
         self.memory.clear()
 
 
-
 if __name__ == "__main__":
 
     ckpt_dir = "ckpt_DQN"
@@ -474,10 +487,12 @@ if __name__ == "__main__":
         os.makedirs(ckpt_dir)
     env_name = "Breakout-v0"
     env = Environment(env_name, False, 84, 84)
-    agent = Agent(env, 100, 10000, 500000, 10000, 4, 0.99, 1, 0.1, 1000000, 50000, 30, 32, ckpt_dir, env_name, 0.00025, 20000, 84, 84, 100000, 0.95, 4)
+    # Create the agent              vv  This number is the number of training states to go over
+    agent = Agent(env, 100, 10000, 1000000, 10000, 4, 0.99, 1, 0.1, 1000000, 30000, 30, 32, ckpt_dir, env_name, 0.00025,
+                  20000, 84, 84, 100000, 0.95, 4)
 
     Trainer(agent).run()
-    #env.render = True
+    # env.render = True
 
     agent.play()
 
