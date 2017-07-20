@@ -357,7 +357,7 @@ class Agent:
         self.env.restart()
         # Play certain number of episodes
         rewards = []
-        with tf.Session as sess:
+        with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             agent.restore(self.saver, sess)
             for i in range(self.episodes):
@@ -531,7 +531,7 @@ if __name__ == "__main__":
     env_name = args.env
     env = Environment(env_name, False, 105, 80)
     # Create the agent              vv  This number is the number of training states to go over
-    agent = Agent(env, 100, 10000, args.train_steps, 10000, 4, 0.99, 1, 0.1, 1000000, 10000, 30, 32, ckpt_dir, env_name, 0.00025,
+    agent = Agent(env, 100, 10000, args.train_steps, 10000, 4, 0.99, 1, 0.1, 1000000, 40000, 30, 32, ckpt_dir, env_name, 0.00025,
                   20000, 105, 80, 100000, 0.95, 4)
 
     Trainer(agent).run()
