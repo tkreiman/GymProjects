@@ -236,9 +236,16 @@ class Agent:
         # Batch size for training
         self.batch_size = batch_size
         # Checkpoint path
-        self.ckpt_file = ckpt_dir + "/" + game
+        self.ckpt_file = ckpt_dir + "/" + game + "/checkpoint"
+        self.ckpt_restore = ckpt_dir + "/" + game
         # Epsilon for testing
         self.epsilon_test = 0.01
+
+        if not os.path.exists(ckpt_dir + "/" + game):
+            os.makedirs(ckpt_dir + "/" + game)
+
+        self.count_states = tf.Variable(initial_value=0, trainable=False, dtype=tf.float32, name="count_states")
+        self.increase_count_states = tf.assign(self.count_states, self.count_states + 1)
 
         self.global_step = tf.Variable(0, trainable=False)
 
@@ -372,11 +379,15 @@ class Agent:
     def save(self, saver, sess, step):
         saver.save(sess, self.ckpt_file, global_step=step)
 
-    def restore(self, saver):
-        ckpt = tf.train.get_checkpoint_state(self.ckpt_file)
 
-        if ckpt and ckpt.model_checkpoint_path:
-            saver.restor(sess, ckpt.model_checkpoint_path)
+    def restore(self, saver, sess):
+
+        try:
+            last_chk_path = tf.train.latest_checkpoint(checkpoint_dir=self.ckpt_restore)
+            saver.restore(sess, last_chk_path)
+            print("Restored checkpoint")
+        except:
+            print("Failed to restore checkpoint")
 
 
 class Trainer:
@@ -389,7 +400,7 @@ class Trainer:
     def run(self):
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            agent.restore(self.saver)
+            agent.restore(self.saver, sess)
             agent.random_restart()
             successes = 0
             failures = 0
@@ -416,7 +427,10 @@ class Trainer:
 
             reward_episode = 0
             reward_history = []
-            for i in range(self.agent.train_steps):
+            count_states = int(sess.run(self.agent.count_states))
+            self.agent.train_steps += count_states
+
+            for i in range(count_states, self.agent.train_steps):
                 eps = self.agent.train_eps(i)
 
                 state, action, reward, next_state, terminal = self.agent.observe(eps)
@@ -459,6 +473,8 @@ class Trainer:
                     "\nAverage Reward:", average_reward)
 
                     total_loss = 0
+
+                sess.run(self.agent.increase_count_states)
 
 
 
@@ -512,7 +528,7 @@ if __name__ == "__main__":
     env_name = args.env
     env = Environment(env_name, False, 105, 80)
     # Create the agent              vv  This number is the number of training states to go over
-    agent = Agent(env, 100, 10000, args.train_steps, 10000, 4, 0.99, 1, 0.1, 1000000, 40000, 30, 32, ckpt_dir, env_name, 0.00025,
+    agent = Agent(env, 100, 10000, args.train_steps, 10000, 4, 0.99, 1, 0.1, 1000000, 10000, 30, 32, ckpt_dir, env_name, 0.00025,
                   20000, 105, 80, 100000, 0.95, 4)
 
     Trainer(agent).run()
