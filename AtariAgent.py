@@ -20,7 +20,7 @@ def process_image(image):
     # First Make Image Grayscale: [210, 160]
     gray = rgb2_grayScale(image)
     # Reshape image
-    img = scipy.misc.imresize(gray, size=[84, 84], interp='bicubic')
+    img = scipy.misc.imresize(gray, size=[105, 80], interp='bicubic')
 
     return img
 # --------------------------------------------------------------------------
@@ -510,10 +510,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     env_name = args.env
-    env = Environment(env_name, False, 84, 84)
+    env = Environment(env_name, False, 105, 80)
     # Create the agent              vv  This number is the number of training states to go over
     agent = Agent(env, 100, 10000, args.train_steps, 10000, 4, 0.99, 1, 0.1, 1000000, 40000, 30, 32, ckpt_dir, env_name, 0.00025,
-                  20000, 84, 84, 100000, 0.95, 4)
+                  20000, 105, 80, 100000, 0.95, 4)
 
     Trainer(agent).run()
     render = True
