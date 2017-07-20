@@ -471,7 +471,7 @@ class ReplayMemory:
         if len(self.memory) >= self.memory.maxlen:
             self.memory.popleft()
 
-        self.memory.append((state, action, reward, next_state, terminal))
+        self.memory.append([state, action, reward, next_state, terminal])
 
     def get_sample(self):
         return random.sample(self.memory, self.batch_size)
