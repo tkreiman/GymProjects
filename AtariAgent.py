@@ -5,6 +5,7 @@ import scipy.misc
 from collections import deque
 import random
 import os
+import argparse
 
 # Helper functions to process image
 
@@ -225,7 +226,8 @@ class Agent:
         self.update_freq = update_freq
         # Epsilon or exploration values
         self.eps = init_eps
-        self.eps_delta = (init_eps - final_eps) / final_eps_frame
+        self.eps_delta = (final_eps - init_eps) / final_eps_frame
+        self.final_eps = final_eps
         self.eps_endt = final_eps_frame
         # Amount of memory to initially populate the replay memory
         self.replay_start_size = replay_start_size
@@ -235,6 +237,8 @@ class Agent:
         self.batch_size = batch_size
         # Checkpoint path
         self.ckpt_file = ckpt_dir + "/" + game
+        # Epsilon for testing
+        self.epsilon_test = 0.01
 
         self.global_step = tf.Variable(0, trainable=False)
 
@@ -284,10 +288,12 @@ class Agent:
                 self.env.restart()
 
     def train_eps(self, train_step):
-        if train_step < self.eps_endt:
-            return self.eps - train_step * self.eps_delta
-
-        return self.eps_endt
+        amount = train_step / self.eps_endt
+        if amount > 1:
+            return self.final_eps
+        else:
+            diff = self.eps - self.final_eps
+            return self.eps - (diff * amount)
 
     def observe(self, exploration_rate):
         # Decide best action based on epsilon greedy
@@ -348,7 +354,7 @@ class Agent:
             terminal = False
             total_reward = 0
             while not terminal:
-                state, action, reward, obs, terminal = self.observe(self.eps)
+                state, action, reward, obs, terminal = self.observe(self.epsilon_test)
                 total_reward += reward
             rewards.append(total_reward)
 
@@ -411,9 +417,9 @@ class Trainer:
             reward_episode = 0
             reward_history = []
             for i in range(self.agent.train_steps):
-                lr = self.agent.train_eps(1)
+                eps = self.agent.train_eps(i)
 
-                state, action, reward, next_state, terminal = self.agent.observe(lr)
+                state, action, reward, next_state, terminal = self.agent.observe(eps)
                 reward_episode += reward
 
                 if terminal:
@@ -443,7 +449,8 @@ class Trainer:
                         average_reward = np.mean(reward_history[-30:])
                     print("\nTraining step: ", i + 1,
                     "\nmemory size: ", len(self.agent.memory),
-                    "\nLearning rate: ", lr,
+                    "\nLearning rate: ", sess.run(self.agent.lr),
+                    "\nEpsilon:", eps,
                     #"\nSuccesses: ", successes,
                     #"\nFailures: ", failures,
                     "\nSample successes: ", sample_success,
@@ -476,7 +483,7 @@ class ReplayMemory:
     def get_sample(self):
         return random.sample(list(self.memory), self.batch_size)
         #return np.random.choice(self.memory, self.batch_size, replace=False)
-        sample = []
+        #sample = []
         #for i in range(self.batch_size):
          #   idx = random.randrange(0, len(self.memory))
 
@@ -490,14 +497,32 @@ if __name__ == "__main__":
     ckpt_dir = "ckpt_DQN"
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
-    env_name = "Breakout-v0"
+
+    parser = argparse.ArgumentParser(description="Reinforcement learning with Tensorflow")
+
+    parser.add_argument("--env", required=False, default='Breakout-v0',
+                        help="name of the game-environment in OpenAI Gym")
+
+    parser.add_argument("--render", required=False, default=False, help="render the test games")
+
+    parser.add_argument("--train_steps", required=False, default=750000, type=int, help="number of train steps to do")
+
+    args = parser.parse_args()
+
+    env_name = args.env
     env = Environment(env_name, False, 84, 84)
     # Create the agent              vv  This number is the number of training states to go over
-    agent = Agent(env, 100, 10000, 1000000, 10000, 4, 0.99, 1, 0.1, 1000000, 30000, 30, 32, ckpt_dir, env_name, 0.00025,
+    agent = Agent(env, 100, 10000, args.train_steps, 10000, 4, 0.99, 1, 0.1, 1000000, 40000, 30, 32, ckpt_dir, env_name, 0.00025,
                   20000, 84, 84, 100000, 0.95, 4)
 
     Trainer(agent).run()
-    # env.render = True
+    render = True
+    if args.render == "False":
+        render = False
+    env.render = render
+
+    print()
+    print("Done training. Playing " + str(agent.episodes) + " games to test...")
 
     agent.play()
 
