@@ -67,6 +67,6 @@ agent = DQN(env, args)
 Trainer(agent).run()
 
 # play the game
-env.gym.monitor.start(args.out, force=True)
+#env.gym.monitor.start(args.out, force=True)
 agent.play()
-env.gym.monitor.close()
+# env.gym.monitor.close()
