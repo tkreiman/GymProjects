@@ -359,7 +359,7 @@ class Agent:
         rewards = []
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            agent.restore(self.saver, sess)
+            agent.restore(tf.train.Saver(), sess)
             for i in range(self.episodes):
                 terminal = False
                 total_reward = 0
