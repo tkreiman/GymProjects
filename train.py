@@ -11,9 +11,9 @@ class Trainer:
 
     def run(self):
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer()))
             self.agent.randomRestart()
-
+            self.agent.restore(self.saver, sess)
             successes = 0
             failures = 0
             total_loss = 0
@@ -36,8 +36,10 @@ class Trainer:
             sample_success = 0
             sample_failure = 0
             print("\nstart training...")
+            count_states = int(sess.run(self.agent.count_states))
+            self.agent.train_steps += count_states
             start_time = time.time()
-            for i in range(self.agent.train_steps):
+            for i in range(count_states, self.agent.train_steps):
                 # annealing learning rate
                 lr = self.agent.trainEps(i)
                 state, action, reward, next_state, terminal = self.agent.observe(lr)
@@ -71,3 +73,5 @@ class Trainer:
                           "\nBatch training time: ", (end_time-start_time)/self.agent.batch_size, "s")
                     start_time = time.time()
                     total_loss = 0
+                
+                sess.run(self.agent.increase_count_states)

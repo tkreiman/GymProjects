@@ -26,6 +26,9 @@ class DQN:
         self.random_starts = params.random_starts
         self.batch_size = params.batch_size
         self.ckpt_file = params.ckpt_dir+'/'+params.game
+        
+        self.count_states = tf.Variable(initial_value=0, trainable=False, dtype=tf.float32, name="count_states")
+        self.increase_count_states = tf.assign(self.count_states, self.count_states + 1)
 
         self.global_step = tf.Variable(0, trainable=False)
         if params.lr_anneal:
@@ -151,9 +154,13 @@ class DQN:
     def save(self, saver, sess, step):
         saver.save(sess, self.ckpt_file, global_step=step)
         
-    def restore(self, saver):
+    def restore(self, saver, sess):
         ckpt = tf.train.get_checkpoint_state(self.ckpt_file)
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
+            print("Checkpoint Restored!")
+        else:
+            print("Failed to restore checkpoint")
+
 
 
