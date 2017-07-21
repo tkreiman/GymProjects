@@ -17,7 +17,7 @@ class Memory:
         self.memory.append( (state, action, reward, next_state, terminal) )
 
     def getSample(self):
-        return rand.sample(self.memory, self.batch_size)
+        return rand.sample(list(self.memory), self.batch_size)
 
     def reset(self):
         self.memory.clear()
