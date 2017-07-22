@@ -75,3 +75,5 @@ class Trainer:
                     total_loss = 0
                 
                 sess.run(self.agent.increase_count_states)
+
+            self.agent.play()

@@ -145,7 +145,7 @@ class DQN:
             total_reward = 0
             while not terminal:
                 #aca cambie algo
-                state, action, reward, screen, terminal = self.observe(self.eps)
+                state, action, reward, screen, terminal = self.observe(0.01)
                 total_reward += reward
             rewards.append(total_reward)
         print(np.mean(rewards))
