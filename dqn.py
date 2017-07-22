@@ -94,7 +94,8 @@ class DQN:
             x = self.buffer.getInput()
             action_values = self.train_net.y.eval( feed_dict={ self.train_net.x: x } )
             a = np.argmax(action_values)
-        
+
+        num_lives = self.env.get_lives()
         state = self.buffer.getState()
         action = np.zeros(self.num_actions)
         action[a] = 1.0
@@ -103,10 +104,12 @@ class DQN:
         self.buffer.add(screen)
         next_state = self.buffer.getState()
         terminal = self.env.isTerminal()
+        num_lives_new = self.env.get_lives()
+        end_life = (num_lives > num_lives_new)
 
         reward = np.clip(reward, -1.0, 1.0)
 
-        self.memory.add(state, action, reward, next_state, terminal)
+        self.memory.add(state, action, reward, next_state, terminal, end_life)
         
         
         return state, action, reward, next_state, terminal
@@ -119,11 +122,12 @@ class DQN:
         successes += np.sum(rewards==1)
         next_state = np.array([batch[i][3] for i in range(self.batch_size)]).astype(np.float32)
         terminals = np.array([batch[i][4] for i in range(self.batch_size)]).astype(np.float32)
+        end_lives = np.array([batch[i][5] for i in range(self.batch_size)]).astype(np.float32)
 
         failures += np.sum(terminals==1)
         q_target = self.target_net.y.eval( feed_dict={ self.target_net.x: next_state } )
         q_target_max = np.argmax(q_target, axis=1)
-        q_target = rewards + ((1.0 - terminals) * (self.discount * q_target_max))
+        q_target = rewards + ((1.0 - terminals) * (1.0 - end_lives) * (self.discount * q_target_max))
 
         (result, loss) = sess.run( [self.task, self.loss],
                                     feed_dict={ self.q_target: q_target,

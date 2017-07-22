@@ -60,3 +60,7 @@ class Environment:
 
     def isTerminal(self):
         return self.terminal
+
+    def get_lives(self):
+        """Get the number of lives the agent has in the game-environment."""
+        return self.gym.unwrapped.ale.lives()
