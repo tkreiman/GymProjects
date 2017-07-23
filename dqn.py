@@ -47,8 +47,9 @@ class DQN:
         self.optimizer = tf.train.RMSPropOptimizer(self.lr, params.decay_rate, 0.0, self.eps)
 
         self.actions = tf.placeholder(tf.float32, [None, self.num_actions])
-        self.q_target = tf.placeholder(tf.float32, [None])
-        self.q_train = tf.reduce_max(tf.multiply(self.train_net.y, self.actions), reduction_indices=1)
+        self.q_target = tf.placeholder(tf.float32, [None, self.num_actions])
+        #self.q_train = tf.reduce_max(tf.multiply(self.train_net.y, self.actions), reduction_indices=1)
+        self.q_train = self.train_net.y
         self.diff = tf.subtract(self.q_target, self.q_train)
 
         half = tf.constant(0.5)
@@ -88,11 +89,11 @@ class DQN:
             return self.eps_endt
 
     def observe(self, exploration_rate):
+        x = self.buffer.getInput()
+        action_values = self.train_net.y.eval(feed_dict={self.train_net.x: x})
         if rand.random() < exploration_rate:
             a = rand.randrange(self.num_actions)
         else:
-            x = self.buffer.getInput()
-            action_values = self.train_net.y.eval( feed_dict={ self.train_net.x: x } )
             a = np.argmax(action_values)
 
         num_lives = self.env.get_lives()
@@ -109,7 +110,7 @@ class DQN:
 
         reward = np.clip(reward, -1.0, 1.0)
 
-        self.memory.add(state, action, reward, next_state, terminal, end_life)
+        self.memory.add(state, action, reward, next_state, terminal, end_life, action_values[0])
         
         
         return state, action, reward, next_state, terminal
@@ -123,14 +124,16 @@ class DQN:
         next_state = np.array([batch[i][3] for i in range(self.batch_size)]).astype(np.float32)
         terminals = np.array([batch[i][4] for i in range(self.batch_size)]).astype(np.float32)
         end_lives = np.array([batch[i][5] for i in range(self.batch_size)]).astype(np.float32)
+        q_values = np.array([batch[i][6] for i in range(self.batch_size)]).astype(np.float32)
 
-        failures += np.sum(terminals==1)
-        q_target = self.target_net.y.eval( feed_dict={ self.target_net.x: next_state } )
-        q_target_max = np.argmax(q_target, axis=1)
-        q_target = rewards + ((1.0 - terminals) * (1.0 - end_lives) * (self.discount * q_target_max))
+
+        #failures += np.sum(terminals==1)
+        #q_target = self.target_net.y.eval( feed_dict={ self.target_net.x: next_state } )
+        #q_target_max = np.argmax(q_target, axis=1)
+        #q_target = rewards + ((1.0 - terminals) * (1.0 - end_lives) * (self.discount * q_target_max))
 
         (result, loss) = sess.run( [self.task, self.loss],
-                                    feed_dict={ self.q_target: q_target,
+                                    feed_dict={ self.q_target: q_values,
                                                 self.train_net.x: state,
                                                 self.actions: actions } )
 

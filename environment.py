@@ -37,6 +37,7 @@ class Environment:
         self.display = params.display
         self.terminal = False
         self.dims = (params.height, params.width)
+        self.training = True
 
     def actions(self):
         return self.gym.action_space.n
@@ -47,7 +48,8 @@ class Environment:
 
     def act(self, action):
         if self.display:
-            self.gym.render()
+            if self.training == False:
+                self.gym.render()
         self.observation, reward, self.terminal, info = self.gym.step(action)
         if self.terminal:
             #if self.display:

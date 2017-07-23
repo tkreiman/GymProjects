@@ -45,6 +45,7 @@ class Trainer:
                 state, action, reward, next_state, terminal = self.agent.observe(lr)
 
                 if len(self.agent.memory) > self.agent.batch_size and (i+1) % self.agent.update_freq == 0:
+                    self.agent.memory.update_q_values()
                     sample_success, sample_failure, loss = self.agent.doMinibatch(sess, sample_success, sample_failure)
                     total_loss += loss
 
@@ -76,4 +77,5 @@ class Trainer:
                 
                 sess.run(self.agent.increase_count_states)
 
+            self.agent.env.training = False
             self.agent.play()
