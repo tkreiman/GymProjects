@@ -1863,8 +1863,8 @@ if __name__ == '__main__':
 
     # Create an agent for either training or testing on the game-environment.
     agent = Agent(env_name=env_name,
-                  training=True,
-                  render=True)
+                  training=training,
+                  render=render)
 
     # Run the agent
     agent.run(num_episodes=num_episodes)
