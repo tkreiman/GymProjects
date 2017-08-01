@@ -1344,7 +1344,7 @@ class NeuralNetwork:
         for v in range(len(self.var_list)):
             # Update ewc loss using the fisher matrix
             self.ewc_loss += (lam / 2) * tf.reduce_sum(
-                tf.multiply(self.fisher[v].astype(np.float32), tf.square(self.var_list[v] - self.star_vars[v])))
+                tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
         # Update the optimizer
         self.optimizer = self.rmsprop.minimize(self.ewc_loss)
 
@@ -1929,7 +1929,7 @@ class Agent:
                 if self.training and end_episode:
                     #msg = "{0:4}:{1}\t Game: {2:4.2f}\t Reward: {3:.1f}\t Episode Mean: {4:.1f}"
                     eps = self.epsilon_greedy.get_epsilon(num_states, self.training)
-                    print(str(episodes) + ":" + str(num_states), "Game:", game, "Epsilon:", eps, "Reward:", reward_episode, "Mean Reward:", round(reward_mean, 1))
+                    print(str(episodes) + ":" + str(num_states), "Game:", game, "Epsilon:", round(eps, 2), "Reward:", reward_episode, "Mean Reward:", round(reward_mean, 1))
 
             # input_set, _ = self.replay_memory.random_batch()
             # self.model.compute_fisher(input_set, num_samples=200)
