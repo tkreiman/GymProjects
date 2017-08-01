@@ -669,7 +669,7 @@ class ReplayMemory:
             # the training of the Neural Network.
             self.rewards[k] = np.clip(reward, -1.0, 1.0)
 
-    def update_all_q_values(self):
+    def update_all_q_values(self, valid_actions):
         """
         Update all Q-values in the replay-memory.
         
@@ -711,7 +711,8 @@ class ReplayMemory:
                 # from continuing the game. We use the estimated Q-values for
                 # the following state and take the maximum, because we will
                 # generally take the action that has the highest Q-value.
-                action_value = reward + self.discount_factor * np.max(self.q_values[k + 1])
+                valid_q = self.q_values[k + 1][valid_actions]
+                action_value = reward + self.discount_factor * np.max(valid_q)
 
             # Error of the Q-value that was estimated using the Neural Network.
             self.estimation_errors[k] = abs(action_value - self.q_values[k, action])
@@ -1415,7 +1416,7 @@ class NeuralNetwork:
 
         return values
 
-    def optimize_adam(self, learning_rate, batch_size=128, max_epochs=10.0, min_epochs=1.0):
+    def optimize_adam(self, learning_rate, batch_size=128, max_epochs=10.0, min_epochs=1.0, loss_limit=0.015):
         self.fisher = []
         for v in range(len(self.var_list)):
             self.fisher.append(np.zeros(self.var_list[v].get_shape().as_list()))
@@ -1425,7 +1426,7 @@ class NeuralNetwork:
         iterations_per_epoch = self.replay_memory.num_used / batch_size
 
         # Minimum number of iterations to perform.
-        min_iterations = int(iterations_per_epoch * min_epochs)
+        min_iterations = int(iterations_per_epoch * min_epochs) + self.last_t
 
         # Maximum number of iterations to perform.
         max_iterations = int(iterations_per_epoch * max_epochs)
@@ -1437,7 +1438,7 @@ class NeuralNetwork:
         print("\tLearning-rate: {0:.1e}".format(learning_rate))
         print("\tMax epochs: {0:.1f}".format(max_epochs))
 
-        for t in range(self.last_t, int(max_iterations * 0.7) + self.last_t):
+        for t in range(self.last_t, max_iterations + self.last_t):
             state_batch, q_values_batch = self.replay_memory.random_batch()
 
             feed_dict = {self.x: state_batch,
@@ -1462,17 +1463,29 @@ class NeuralNetwork:
                 # self.last_v[var] = v
                 # self.last_m[var] = m
 
+                # Update fisher information matrix for each variable
                 v = self.adam.get_slot(self.var_list[var], "v")
                 self.fisher[var] = v / (1 - self.beta2 ** t)
 
             loss_val, _ = self.session.run([self.ewc_loss, self.adam_train_step], feed_dict=feed_dict)
+            # Shift the loss-history and assign the new value.
+            # This causes the loss-history to only hold the most recent values.
+            loss_history = np.roll(loss_history, 1)
+            loss_history[0] = loss_val
+
+            # Calculate the average loss for the previous batches.
+            loss_mean = np.mean(loss_history)
+
             # Print status.
             pct_epoch = t / iterations_per_epoch
-            msg = "\tIteration: {0} ({1:.2f} epoch), Batch loss: {2:.4f}"
-            msg = msg.format(t, pct_epoch, loss_val)
+            msg = "\tIteration: {0} ({1:.2f} epoch), Batch loss: {2:.4f}, Mean loss: {3:.4f}"
+            msg = msg.format(t, pct_epoch, loss_val, loss_mean)
             print_progress(msg)
 
-        self.last_t += int(max_iterations * 0.7)
+            if t > min_iterations and loss_mean < loss_limit:
+                break
+
+            self.last_t += 1
 
     def optimize(self, min_epochs=1.0, max_epochs=10,
                  batch_size=128, loss_limit=0.015,
@@ -1809,6 +1822,13 @@ class Agent:
         """Get the number of lives the agent has in the game-environment."""
         return self.env.unwrapped.ale.lives()
 
+    def valid_actions(self):
+        indices_of_actions = []
+        for action in self.action_names:
+            indices_of_actions.append(self.all_action_names.index(action))
+
+        return indices_of_actions
+
     def get_action(self, q_values, iteration):
         eps = self.epsilon_greedy.get_epsilon(iteration, self.training)
 
@@ -1882,7 +1902,7 @@ class Agent:
                     # When the replay-memory is sufficiently full.
                     if self.replay_memory.is_full() or self.replay_memory.used_fraction() > use_fraction:
                         # Update all Q-values in the replay-memory through a backwards-sweep.
-                        self.replay_memory.update_all_q_values()
+                        self.replay_memory.update_all_q_values(self.valid_actions())
                         # Get the control parameters for optimization of the Neural Network.
                         # These are changed linearly depending on the state-counter.
                         learning_rate = self.learning_rate_control.get_value(iteration=num_states)
@@ -1891,7 +1911,7 @@ class Agent:
                         # Perform an optimization run on the Neural Network so as to
                         # improve the estimates for the Q-values.
                         # This will sample random batches from the replay-memory.
-                        self.model.optimize_adam(learning_rate=learning_rate, max_epochs=max_epochs)
+                        self.model.optimize_adam(learning_rate=learning_rate, max_epochs=max_epochs, loss_limit=loss_limit)
                         # Save a checkpoint of the Neural Network so we can reload it.
                         self.model.save_checkpoint(num_states)
                         # Reset the replay-memory. This throws away all the data we have
@@ -1908,7 +1928,8 @@ class Agent:
 
                 if self.training and end_episode:
                     #msg = "{0:4}:{1}\t Game: {2:4.2f}\t Reward: {3:.1f}\t Episode Mean: {4:.1f}"
-                    print(str(episodes) + ":" + str(num_states), "Game:", game, "Reward:", reward_episode, "Mean Reward:", reward_mean)
+                    eps = self.epsilon_greedy.get_epsilon(num_states, self.training)
+                    print(str(episodes) + ":" + str(num_states), "Game:", game, "Epsilon:", eps, "Reward:", reward_episode, "Mean Reward:", round(reward_mean, 1))
 
             # input_set, _ = self.replay_memory.random_batch()
             # self.model.compute_fisher(input_set, num_samples=200)
