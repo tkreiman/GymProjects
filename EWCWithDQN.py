@@ -1125,6 +1125,11 @@ class NeuralNetwork:
         self.count_episodes_increase = tf.assign(self.count_episodes,
                                                  self.count_episodes + 1)
 
+        # Tensor for the fisher matrix
+        self.fisher_tensor = tf.Variable(initial_value=0,
+                                          trainable=False, dtype=tf.float32,
+                                          name='fisher')
+
         # The Neural Network will be constructed in the following.
         # Note that the architecture of this Neural Network is very
         # different from that used in the original DeepMind papers,
@@ -1377,6 +1382,7 @@ class NeuralNetwork:
 
             # If we get to this point, the checkpoint was successfully loaded.
             print("Restored checkpoint from:", last_chk_path)
+            self.fisher = self.session.run(self.fisher_tensor)
         except:
             # If the above failed for some reason, simply
             # initialize all the variables for the TensorFlow graph.
@@ -1486,6 +1492,9 @@ class NeuralNetwork:
                 break
 
             self.last_t += 1
+
+        fisher_v = tf.Variable(initial_value=self.fisher, dtype=tf.float32)
+        self.session.run(tf.assign(self.fisher_tensor, fisher_v, validate_shape=False))
 
     def optimize(self, min_epochs=1.0, max_epochs=10,
                  batch_size=128, loss_limit=0.015,
@@ -1708,7 +1717,7 @@ class Agent:
         :param use_logging:
             Boolean whether to use logging to text-files during training.
         """
-        self.games = ["Breakout-v0", "Atlantis-v0", "Boxing-v0", "VideoPinball-v0", "Robotank-v0"]
+        self.games = ["Robotank-v0", "Breakout-v0", "Atlantis-v0", "Boxing-v0", "VideoPinball-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
