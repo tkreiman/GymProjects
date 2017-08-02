@@ -1493,8 +1493,8 @@ class NeuralNetwork:
 
             self.last_t += 1
 
-        fisher_v = tf.Variable(initial_value=self.fisher, dtype=tf.float32)
-        self.session.run(tf.assign(self.fisher_tensor, fisher_v, validate_shape=False))
+        # fisher_v = tf.Variable(initial_value=self.fisher, dtype=tf.float32)
+        self.session.run(tf.assign(self.fisher_tensor, self.fisher, validate_shape=False))
 
     def optimize(self, min_epochs=1.0, max_epochs=10,
                  batch_size=128, loss_limit=0.015,
