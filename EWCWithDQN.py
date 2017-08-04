@@ -1373,6 +1373,9 @@ class NeuralNetwork:
             for v in range(len(self.var_list)):
                 self.session.run(self.var_list[v].assign(self.star_vars[v]))
 
+    def change_target_q_placeholder(self, num_actions):
+        self.q_values_new = tf.placeholder(tf.float32, shape=[None, num_actions], name='q_values_new')
+
     def load_checkpoint(self):
         """
         Load all variables of the TensorFlow graph from a checkpoint.
@@ -1881,6 +1884,7 @@ class Agent:
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
             self.replay_memory.reset_memory_size(self.env.action_space.n)
+            self.model.change_target_q_placeholder(len(self.action_names))
             episodes = 0
             num_states = 0
             end_episode = True
