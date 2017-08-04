@@ -575,29 +575,6 @@ class ReplayMemory:
         :param discount_factor:
             Discount-factor used for updating Q-values.
         """
-
-        # Array for the previous states of the game-environment.
-        self.states = np.zeros(shape=[size] + state_shape, dtype=np.uint8)
-
-        # Array for the Q-values corresponding to the states.
-        self.q_values = np.zeros(shape=[size, num_actions], dtype=np.float)
-
-        # Array for the Q-values before being updated.
-        # This is used to compare the Q-values before and after the update.
-        self.q_values_old = np.zeros(shape=[size, num_actions], dtype=np.float)
-
-        # Actions taken for each of the states in the memory.
-        self.actions = np.zeros(shape=size, dtype=np.int)
-
-        # Rewards observed for each of the states in the memory.
-        self.rewards = np.zeros(shape=size, dtype=np.float)
-
-        # Whether the life had ended in each state of the game-environment.
-        self.end_life = np.zeros(shape=size, dtype=np.bool)
-
-        # Whether the episode had ended (aka. game over) in each state.
-        self.end_episode = np.zeros(shape=size, dtype=np.bool)
-
         # Estimation errors for the Q-values. This is used to balance
         # the sampling of batches for training the Neural Network,
         # so we get a balanced combination of states with high and low
@@ -615,6 +592,31 @@ class ReplayMemory:
 
         # Threshold for splitting between low and high estimation errors.
         self.error_threshold = 0.1
+
+        self.reset_memory_size(num_actions)
+
+    def reset_memory_size(self, num_actions):
+        # Array for the previous states of the game-environment.
+        self.states = np.zeros(shape=[self.size] + state_shape, dtype=np.uint8)
+
+        # Array for the Q-values corresponding to the states.
+        self.q_values = np.zeros(shape=[self.size, num_actions], dtype=np.float)
+
+        # Array for the Q-values before being updated.
+        # This is used to compare the Q-values before and after the update.
+        self.q_values_old = np.zeros(shape=[self.size, num_actions], dtype=np.float)
+
+        # Actions taken for each of the states in the memory.
+        self.actions = np.zeros(shape=self.size, dtype=np.int)
+
+        # Rewards observed for each of the states in the memory.
+        self.rewards = np.zeros(shape=self.size, dtype=np.float)
+
+        # Whether the life had ended in each state of the game-environment.
+        self.end_life = np.zeros(shape=self.size, dtype=np.bool)
+
+        # Whether the episode had ended (aka. game over) in each state.
+        self.end_episode = np.zeros(shape=self.size, dtype=np.bool)
 
     def is_full(self):
         """Return boolean whether the replay-memory is full."""
@@ -711,8 +713,8 @@ class ReplayMemory:
                 # from continuing the game. We use the estimated Q-values for
                 # the following state and take the maximum, because we will
                 # generally take the action that has the highest Q-value.
-                valid_q = self.q_values[k + 1][valid_actions]
-                action_value = reward + self.discount_factor * np.max(valid_q)
+                # valid_q = self.q_values[k + 1][valid_actions]
+                action_value = reward + self.discount_factor * np.max(self.q_values[k + 1])
 
             # Error of the Q-value that was estimated using the Neural Network.
             self.estimation_errors[k] = abs(action_value - self.q_values[k, action])
@@ -1069,7 +1071,7 @@ class NeuralNetwork:
     better at estimating the Q-values.
     """
 
-    def __init__(self, num_actions, replay_memory, use_pretty_tensor=False):
+    def __init__(self, num_actions, replay_memory, action_indices, use_pretty_tensor=False):
         """
         :param num_actions:
             Number of discrete actions for the game-environment.
@@ -1080,6 +1082,10 @@ class NeuralNetwork:
             installed, or use the tf.layers API (False) which is already
             built into TensorFlow.
         """
+
+        # Set valid action indices
+        self.action_indices_placeholder = tf.placeholder(dtype=tf.int32, shape=[None, 1])
+        self.action_indices = action_indices
 
         # Whether to use the PrettyTensor API (True) or tf.layers (False).
         self.use_pretty_tensor = use_pretty_tensor
@@ -1255,6 +1261,8 @@ class NeuralNetwork:
             net = tf.layers.dense(inputs=net, name='layer_fc_out', units=num_actions,
                                   kernel_initializer=init, activation=None)
 
+
+            net = tf.transpose(tf.gather_nd(tf.transpose(net), self.action_indices_placeholder))
             # The output of the Neural Network is the estimated Q-values
             # for each possible action in the game-environment.
             self.q_values = net
@@ -1413,9 +1421,10 @@ class NeuralNetwork:
         There is a Q-value for each possible action in the game-environment.
         So the output is a 2-dim array with shape: [batch, num_actions]
         """
-
         # Create a feed-dict for inputting the states to the Neural Network.
-        feed_dict = {self.x: states}
+        indices = []
+        [indices.append([self.action_indices[i]]) for i in range(len(self.action_indices))]
+        feed_dict = {self.x: states, self.action_indices_placeholder: indices}
 
         # Use TensorFlow to calculate the estimated Q-values for these states.
         values = self.session.run(self.q_values, feed_dict=feed_dict)
@@ -1447,9 +1456,12 @@ class NeuralNetwork:
         for t in range(self.last_t, max_iterations + self.last_t):
             state_batch, q_values_batch = self.replay_memory.random_batch()
 
+            indices = []
+            [indices.append([self.action_indices[i]]) for i in range(len(self.action_indices))]
             feed_dict = {self.x: state_batch,
                          self.q_values_new: q_values_batch,
-                         self.learning_rate: learning_rate}
+                         self.learning_rate: learning_rate,
+                         self.action_indices_placeholder: indices}
             for var in range(len(self.var_list)):
                 # # Calculate gradient, v, and m values
                 # g_and_v_list = self.session.run(self.adam.compute_gradients(self.ewc_loss, self.var_list[var]), feed_dict=feed_dict)
@@ -1717,14 +1729,14 @@ class Agent:
         :param use_logging:
             Boolean whether to use logging to text-files during training.
         """
-        self.games = ["Robotank-v0", "Breakout-v0", "Atlantis-v0", "Boxing-v0", "VideoPinball-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "Boxing-v0", "VideoPinball-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
 
         # Create the game-environment using OpenAI Gym.
         self.env = gym.make(env_name)
-
+        self.action_names = self.env.unwrapped.get_action_meanings()
         # The number of possible actions that the agent may take in every step.
         self.num_actions = self.env.action_space.n
 
@@ -1814,7 +1826,7 @@ class Agent:
 
         # Create the Neural Network used for estimating Q-values.
         self.model = NeuralNetwork(num_actions=18,
-                                   replay_memory=self.replay_memory, use_pretty_tensor=False)
+                                   replay_memory=self.replay_memory, use_pretty_tensor=False, action_indices=self.valid_actions())
 
         # Log of the rewards obtained in each episode during calls to run()
         self.episode_rewards = []
@@ -1861,11 +1873,14 @@ class Agent:
             self.env = gym.make(game)
             self.replay_memory.reset()
             self.model.restore()
+            self.epsilon_greedy.num_actions = self.env.action_space.n
             # Update ewc loss
             if i > 0:
                 self.model.update_ewc_loss(15)
 
             self.action_names = self.env.unwrapped.get_action_meanings()
+            self.model.action_indices = self.valid_actions()
+            self.replay_memory.reset_memory_size(self.env.action_space.n)
             episodes = 0
             num_states = 0
             end_episode = True
@@ -1887,7 +1902,8 @@ class Agent:
                 # Get q values
                 q_values = self.model.get_q_values([state])[0]
                 # Determine action based on epsilon greedy
-                action = self.get_action(q_values, num_states)
+                # action = self.get_action(q_values, num_states)
+                action, epsilon = self.epsilon_greedy.get_action(q_values=q_values, iteration=num_states, training=self.training)
                 # Act the action and get result
                 img, reward, end_episode, info = self.env.step(action)
                 # Process state
