@@ -1107,7 +1107,7 @@ class NeuralNetwork:
         # Placeholder variable for inputting the target Q-values
         # that we want the Neural Network to be able to estimate.
         self.q_values_new = tf.placeholder(tf.float32,
-                                           shape=[None, num_actions],
+                                           shape=[None, len(self.action_indices)],
                                            name='q_values_new')
 
         # This is a hack that allows us to save/load the counter for
