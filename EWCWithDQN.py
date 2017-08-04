@@ -6,36 +6,6 @@ Created on Tue Jul 11 14:28:14 2017
 @author: tobykreiman
 """
 ########################################################################
-#
-# Reinforcement Learning (Q-Learning) for Atari Games
-#
-# How to run:
-#
-# To train a Neural Network for playing the Atari game Breakout,
-# run the following command in a terminal window.
-#
-# python reinforcement-learning.py --env 'Breakout-v0' --training
-#
-# The agent should start to improve after a few hours, but a full
-# training run required 150 hours on a 2.6 GHz CPU and GTX 1070 GPU.
-#
-# The hyper-parameters were tuned for Breakout and did not work
-# quite as well for SpaceInvaders. Can you find better parameters?
-#
-# Once the Neural Network has been trained, you can test it and
-# watch it play the game by running this command in the terminal:
-#
-# python reinforcement-learning.py --env 'Breakout-v0' --render --episodes 2
-#
-# Requirements:
-#
-# - Python 3.6 (Python 2.7 may not work)
-# - TensorFlow 1.1.0
-# - OpenAI Gym 0.8.1
-# - PrettyTensor 0.7.4 (not required if you use tf.layers instead)
-#
-# Summary:
-#
 # This program implements a variant of Reinforcement Learning known as
 # Q-learning. Imagine that we have an agent that must take actions in
 # some environment so as to maximize the cumulative reward over its life.
@@ -150,16 +120,6 @@ Created on Tue Jul 11 14:28:14 2017
 #
 # 8) Input the recent image of the game-environment to the Motion Tracer
 #    and repeat from step (3).
-#
-########################################################################
-#
-# This file is part of the TensorFlow Tutorials available at:
-#
-# https://github.com/Hvass-Labs/TensorFlow-Tutorials
-#
-# Published under the MIT License. See the file LICENSE for details.
-#
-# Copyright 2017 by Magnus Erik Hvass Pedersen
 #
 ########################################################################
 
@@ -1107,7 +1067,7 @@ class NeuralNetwork:
         # Placeholder variable for inputting the target Q-values
         # that we want the Neural Network to be able to estimate.
         self.q_values_new = tf.placeholder(tf.float32,
-                                           shape=[None, len(self.action_indices)],
+                                           shape=[None, None],
                                            name='q_values_new')
 
         # This is a hack that allows us to save/load the counter for
@@ -1373,9 +1333,6 @@ class NeuralNetwork:
             for v in range(len(self.var_list)):
                 self.session.run(self.var_list[v].assign(self.star_vars[v]))
 
-    def change_target_q_placeholder(self, num_actions):
-        self.q_values_new = tf.placeholder(tf.float32, shape=[None, num_actions], name='q_values_new')
-
     def load_checkpoint(self):
         """
         Load all variables of the TensorFlow graph from a checkpoint.
@@ -1465,6 +1422,7 @@ class NeuralNetwork:
                          self.q_values_new: q_values_batch,
                          self.learning_rate: learning_rate,
                          self.action_indices_placeholder: indices}
+
             for var in range(len(self.var_list)):
                 # # Calculate gradient, v, and m values
                 # g_and_v_list = self.session.run(self.adam.compute_gradients(self.ewc_loss, self.var_list[var]), feed_dict=feed_dict)
@@ -1884,7 +1842,7 @@ class Agent:
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
             self.replay_memory.reset_memory_size(self.env.action_space.n)
-            self.model.change_target_q_placeholder(len(self.action_names))
+
             episodes = 0
             num_states = 0
             end_episode = True
@@ -2193,7 +2151,7 @@ if __name__ == '__main__':
 
     # Create an agent for either training or testing on the game-environment.
     agent = Agent(env_name=env_name,
-                  training=training,
+                  training=True,
                   render=render)
 
     # Run the agent
