@@ -1890,7 +1890,9 @@ class Agent:
             self.model.save_biases(game)
             self.model.save_optimal_weights()
 
-        self.test_on_ewc_games(2)
+        print()
+        print("Testing games!")
+        self.test_on_ewc_games(40)
 
     def test_on_ewc_games(self, eps_per_game):
         # Array to keep track of rewards in each game
@@ -1934,6 +1936,7 @@ class Agent:
                 reward_episode += reward
 
                 if end_episode:
+                    print(episodes, game, reward_episode)
                     reward_history.append(reward_episode)
 
             mean_rewards.append(np.mean(reward_history))
