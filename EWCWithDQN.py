@@ -1276,6 +1276,10 @@ class NeuralNetwork:
             self.last_v.append(np.zeros(np.shape(v)))
         self.last_t = 1
 
+        self.fisher = []
+        for v in range(len(self.var_list)):
+            self.fisher.append(np.zeros(self.var_list[v].get_shape().as_list()))
+
         # Load the most recent checkpoint if it exists,
         # otherwise initialize all the variables in the TensorFlow graph.
         self.load_checkpoint()
@@ -1284,30 +1288,11 @@ class NeuralNetwork:
         """Close the TensorFlow session."""
         self.session.close()
 
-    def compute_fisher(self, input_set, num_samples=200):
-        # Get the variables of the current model
-        var_list = self.var_list
-
-        # Create fisher matrix with zeros
-        self.fisher = []
-        for v in range(len(var_list)):
-            self.fisher.append(np.zeros(var_list[v].get_shape().as_list()))
-
-        y = self.q_values
-        class_ind = tf.to_int32(tf.multinomial(tf.log(y), 1)[0][0])
-
-        for i in range(num_samples):
-            # select random input image
-            im_ind = np.random.randint(input_set.shape[0])
-            # compute first-order derivatives
-            ders = self.session.run(tf.gradients(tf.log(y[0, class_ind]), var_list), feed_dict={self.x: input_set[im_ind:im_ind + 1]})
-            # square the derivatives and add to total
-            for v in range(len(self.fisher)):
-                self.fisher[v] += np.square(ders[v])
-
-        # divide totals by number of samples
-        for v in range(len(self.fisher)):
-            self.fisher[v] /= num_samples
+    def compute_fisher(self):
+        for var in range(len(self.var_list)):
+            # Update fisher information matrix for each variable
+            v = self.adam.get_slot(self.var_list[var], "v")
+            self.fisher[var] = v / (1 - self.beta2 ** self.last_t)
 
     def update_ewc_loss(self, lam):
         # lam is weighting for previous task(s) constraints
@@ -1392,9 +1377,6 @@ class NeuralNetwork:
         return values
 
     def optimize_adam(self, learning_rate, batch_size=128, max_epochs=10.0, min_epochs=1.0, loss_limit=0.015):
-        self.fisher = []
-        for v in range(len(self.var_list)):
-            self.fisher.append(np.zeros(self.var_list[v].get_shape().as_list()))
 
         self.replay_memory.prepare_sampling_prob(batch_size=batch_size)
 
@@ -1422,29 +1404,6 @@ class NeuralNetwork:
                          self.q_values_new: q_values_batch,
                          self.learning_rate: learning_rate,
                          self.action_indices_placeholder: indices}
-
-            for var in range(len(self.var_list)):
-                # # Calculate gradient, v, and m values
-                # g_and_v_list = self.session.run(self.adam.compute_gradients(self.ewc_loss, self.var_list[var]), feed_dict=feed_dict)
-                # g = np.array([g_and_v_list[i][0] for i in range(len(g_and_v_list))]).astype(np.float32)
-                # m = self.last_m[var] * self.beta1 + (1 - self.beta1) * g
-                #
-                # # Make it element wise multiplication
-                # v = self.last_v[var] * self.beta2 + (1 - self.beta2) * np.multiply(g, g)
-                #
-                # # Update fisher and weights
-                # self.fisher[var] = v / (1 - self.beta2 ** t)
-                # # This line:
-                # # self.session.run(self.adam.apply_gradients(g_and_v_list))
-                # # Produces: AttributeError: 'numpy.ndarray' object has no attribute 'op'
-                #
-                # # Remember m and v of last time step
-                # self.last_v[var] = v
-                # self.last_m[var] = m
-
-                # Update fisher information matrix for each variable
-                v = self.adam.get_slot(self.var_list[var], "v")
-                self.fisher[var] = v / (1 - self.beta2 ** t)
 
             loss_val, _ = self.session.run([self.ewc_loss, self.adam_train_step], feed_dict=feed_dict)
             # Shift the loss-history and assign the new value.
@@ -1662,6 +1621,12 @@ class NeuralNetwork:
         """
         return self.session.run(self.count_episodes_increase)
 
+    def restore_bias(self, game):
+        biases = self.bias_history[game]
+
+        for i in range(len(biases)):
+            self.session.run(tf.assign(self.bias_list[i], biases[i]))
+
 ########################################################################
 
 
@@ -1690,7 +1655,7 @@ class Agent:
         :param use_logging:
             Boolean whether to use logging to text-files during training.
         """
-        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "Boxing-v0", "VideoPinball-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "Boxing-v0", "Gopher-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
@@ -1834,9 +1799,11 @@ class Agent:
             self.env = gym.make(game)
             self.replay_memory.reset()
             self.model.restore()
+            self.model.last_t = 1
             self.epsilon_greedy.num_actions = self.env.action_space.n
             # Update ewc loss
             if i > 0:
+                self.model.compute_fisher()
                 self.model.update_ewc_loss(15)
 
             self.action_names = self.env.unwrapped.get_action_meanings()
@@ -1922,6 +1889,58 @@ class Agent:
             # self.model.compute_fisher(input_set, num_samples=200)
             self.model.save_biases(game)
             self.model.save_optimal_weights()
+
+        self.test_on_ewc_games(2)
+
+    def test_on_ewc_games(self, eps_per_game):
+        # Array to keep track of rewards in each game
+        mean_rewards = []
+
+        for game in self.games:
+            self.env = gym.make(game)
+            # Restore learned biases for this game
+            self.model.restore_bias(game)
+            # Update model for valid actions
+            self.action_names = self.env.unwrapped.get_action_meanings()
+            self.model.action_indices = self.valid_actions()
+            # Set number of actions for epsilon greedy
+            self.epsilon_greedy.num_actions = self.env.action_space.n
+            reward_history = []
+            episodes = 0
+            end_episode = True
+            while episodes < eps_per_game:
+                if end_episode:
+                    # Reset environment
+                    img = self.env.reset()
+                    # Make motion tracer
+                    motion_tracer = MotionTracer(img)
+
+                    episodes += 1
+                    reward_episode = 0
+
+                # Get state from game
+                state = motion_tracer.get_state()
+                # Get q values
+                q_values = self.model.get_q_values([state])[0]
+                # Determine action based on epsilon greedy
+                # action = self.get_action(q_values, num_states)
+                action, _ = self.epsilon_greedy.get_action(q_values=q_values, iteration=0,
+                                                                 training=False)
+                # Act the action and get result
+                img, reward, end_episode, info = self.env.step(action)
+                # Process state
+                motion_tracer.process(img)
+                # Add reward
+                reward_episode += reward
+
+                if end_episode:
+                    reward_history.append(reward_episode)
+
+            mean_rewards.append(np.mean(reward_history))
+
+        print()
+        print("Done testing!")
+        print(mean_rewards, self.games)
 
 
 
@@ -2161,10 +2180,10 @@ if __name__ == '__main__':
     # Print statistics.
     rewards = agent.episode_rewards
     print()  # Newline.
-    print("Rewards for {0} episodes:".format(len(rewards)))
-    print("- Min:   ", np.min(rewards))
-    print("- Mean:  ", np.mean(rewards))
-    print("- Max:   ", np.max(rewards))
-    print("- Stdev: ", np.std(rewards))
+    #print("Rewards for {0} episodes:".format(len(rewards)))
+    #print("- Min:   ", np.min(rewards))
+    #print("- Mean:  ", np.mean(rewards))
+    #print("- Max:   ", np.max(rewards))
+    #print("- Stdev: ", np.std(rewards))
 
 ########################################################################
