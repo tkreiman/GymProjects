@@ -1655,7 +1655,7 @@ class Agent:
         :param use_logging:
             Boolean whether to use logging to text-files during training.
         """
-        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "Boxing-v0", "Gopher-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
