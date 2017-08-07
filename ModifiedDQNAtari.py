@@ -5,35 +5,6 @@ Created on Tue Jul 11 14:28:14 2017
 
 @author: tobykreiman
 """
-########################################################################
-#
-# Reinforcement Learning (Q-Learning) for Atari Games
-#
-# How to run:
-#
-# To train a Neural Network for playing the Atari game Breakout,
-# run the following command in a terminal window.
-#
-# python reinforcement-learning.py --env 'Breakout-v0' --training
-#
-# The agent should start to improve after a few hours, but a full
-# training run required 150 hours on a 2.6 GHz CPU and GTX 1070 GPU.
-#
-# The hyper-parameters were tuned for Breakout and did not work
-# quite as well for SpaceInvaders. Can you find better parameters?
-#
-# Once the Neural Network has been trained, you can test it and
-# watch it play the game by running this command in the terminal:
-#
-# python reinforcement-learning.py --env 'Breakout-v0' --render --episodes 2
-#
-# Requirements:
-#
-# - Python 3.6 (Python 2.7 may not work)
-# - TensorFlow 1.1.0
-# - OpenAI Gym 0.8.1
-# - PrettyTensor 0.7.4 (not required if you use tf.layers instead)
-#
 # Summary:
 #
 # This program implements a variant of Reinforcement Learning known as
@@ -151,17 +122,7 @@ Created on Tue Jul 11 14:28:14 2017
 # 8) Input the recent image of the game-environment to the Motion Tracer
 #    and repeat from step (3).
 #
-########################################################################
-#
-# This file is part of the TensorFlow Tutorials available at:
-#
-# https://github.com/Hvass-Labs/TensorFlow-Tutorials
-#
-# Published under the MIT License. See the file LICENSE for details.
-#
-# Copyright 2017 by Magnus Erik Hvass Pedersen
-#
-########################################################################
+
 
 import numpy as np
 import tensorflow as tf
