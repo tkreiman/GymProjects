@@ -1655,7 +1655,8 @@ class Agent:
         :param use_logging:
             Boolean whether to use logging to text-files during training.
         """
-        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
+        # self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
@@ -1775,6 +1776,9 @@ class Agent:
             indices_of_actions.append(self.all_action_names.index(action))
 
         return indices_of_actions
+
+    def lives(self, env):
+        return env.unwrapped.ale.lives()
 
     def get_action(self, q_values, iteration):
         eps = self.epsilon_greedy.get_epsilon(iteration, self.training)
@@ -1945,6 +1949,104 @@ class Agent:
         print("Done testing!")
         print(mean_rewards, self.games)
 
+    def train_ewc_multiple(self, episodes_per_game, states_per_game, num_environments):
+        for i in range(0, len(self.games)):
+            # Set up new environment
+            game = self.games[i]
+            self.env = gym.make(game)
+            environments = [gym.make(game) for i in range(num_environments)]
+            self.replay_memory.reset()
+            self.model.restore()
+            self.model.last_t = 1
+            self.epsilon_greedy.num_actions = self.env.action_space.n
+            # Update ewc loss
+            if i > 0:
+                self.model.compute_fisher()
+                self.model.update_ewc_loss(15)
+
+            self.action_names = self.env.unwrapped.get_action_meanings()
+            self.model.action_indices = self.valid_actions()
+            self.replay_memory.reset_memory_size(self.env.action_space.n)
+
+            episodes = 0
+            num_states = 0
+            end_episode = True
+            end_episodes = np.full([num_environments], False)
+            reward_history = []
+            while episodes <= episodes_per_game and num_states <= states_per_game:
+                if end_episode:
+                    # Get initial observation
+                    imgs = [environments[i].reset() for i in range(num_environments)]
+                    # Reset values
+                    motion_tracers = [MotionTracer(imgs[i]) for i in range(num_environments)]
+                    reward_episodes = np.zeros(num_environments)
+                    episodes_total = self.model.increase_count_episodes()
+                    episodes += 1
+                    num_lives = np.full([num_environments], self.get_lives())
+
+                # Get state from game
+                states = [motion_tracers[i].get_state() for i in range(num_environments)]
+                # Get q values
+                q_values = self.model.get_q_values([states])
+                # Determine action based on epsilon greedy
+                # action = self.get_action(q_values, num_states)
+                action, epsilon = self.epsilon_greedy.get_action(q_values=q_values, iteration=num_states, training=self.training)
+                # Act the action and get result
+                img, reward, end_episode, info = self.env.step(action)
+                # Process state
+                motion_tracer.process(img)
+                # Add reward
+                reward_episode += reward
+                # Determine if a life was lost in this step.
+                num_lives_new = self.get_lives()
+                end_life = (num_lives_new < num_lives)
+                num_lives = num_lives_new
+                # Increase count states
+                num_states += 1
+
+                if self.training:
+                    self.replay_memory.add(state=state, q_values=q_values, action=action, reward=reward,
+                                           end_life=end_life, end_episode=end_episode)
+
+                    # How much of the replay-memory should be used.
+                    use_fraction = self.replay_fraction.get_value(iteration=num_states)
+
+                    # When the replay-memory is sufficiently full.
+                    if self.replay_memory.is_full() or self.replay_memory.used_fraction() > use_fraction:
+                        # Update all Q-values in the replay-memory through a backwards-sweep.
+                        self.replay_memory.update_all_q_values(self.valid_actions())
+                        # Get the control parameters for optimization of the Neural Network.
+                        # These are changed linearly depending on the state-counter.
+                        learning_rate = self.learning_rate_control.get_value(iteration=num_states)
+                        loss_limit = self.loss_limit_control.get_value(iteration=num_states)
+                        max_epochs = self.max_epochs_control.get_value(iteration=num_states)
+                        # Perform an optimization run on the Neural Network so as to
+                        # improve the estimates for the Q-values.
+                        # This will sample random batches from the replay-memory.
+                        self.model.optimize_adam(learning_rate=learning_rate, max_epochs=max_epochs, loss_limit=loss_limit)
+                        # Save a checkpoint of the Neural Network so we can reload it.
+                        self.model.save_checkpoint(num_states)
+                        # Reset the replay-memory. This throws away all the data we have
+                        # just gathered, so we will have to fill the replay-memory again.
+                        self.replay_memory.reset()
+
+                if end_episode:
+                    reward_history.append(reward_episode)
+
+                if len(reward_history) == 0:
+                    reward_mean = 0
+                else:
+                    reward_mean = np.mean(reward_history[-30:])
+
+                if self.training and end_episode:
+                    #msg = "{0:4}:{1}\t Game: {2:4.2f}\t Reward: {3:.1f}\t Episode Mean: {4:.1f}"
+                    eps = self.epsilon_greedy.get_epsilon(num_states, self.training)
+                    print(str(episodes) + ":" + str(num_states), "Game:", game, "Epsilon:", round(eps, 2), "Reward:", reward_episode, "Mean Reward:", round(reward_mean, 1))
+
+            # input_set, _ = self.replay_memory.random_batch()
+            # self.model.compute_fisher(input_set, num_samples=200)
+            self.model.save_biases(game)
+            self.model.save_optimal_weights()
 
 
 
