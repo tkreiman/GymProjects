@@ -186,11 +186,6 @@ def update_paths(env_name):
 ########################################################################
 # Download TensorFlow checkpoints.
 
-# URL's for the checkpoint-files.
-_checkpoint_url = {
-    "Breakout-v0": "http://hvass-labs.org/projects/tensorflow/tutorial16/Breakout-v0.tar.gz",
-    "SpaceInvaders-v0": "http://hvass-labs.org/projects/tensorflow/tutorial16/SpaceInvaders-v0.tar.gz"
-}
 
 
 def maybe_download_checkpoint(env_name):
@@ -1301,6 +1296,7 @@ class NeuralNetwork:
 
         for v in range(len(self.var_list)):
             # Update ewc loss using the fisher matrix
+            self.ewc_loss_fisher_part = (lam / 2) * tf.reduce_sum(tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
             self.ewc_loss += (lam / 2) * tf.reduce_sum(
                 tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
         # Update the optimizer
@@ -1405,7 +1401,7 @@ class NeuralNetwork:
                          self.learning_rate: learning_rate,
                          self.action_indices_placeholder: indices}
 
-            loss_val, _ = self.session.run([self.ewc_loss, self.adam_train_step], feed_dict=feed_dict)
+            loss_val, _, loss_normal = self.session.run([self.ewc_loss, self.adam_train_step, self.loss], feed_dict=feed_dict)
             # Shift the loss-history and assign the new value.
             # This causes the loss-history to only hold the most recent values.
             loss_history = np.roll(loss_history, 1)
@@ -1414,16 +1410,22 @@ class NeuralNetwork:
             # Calculate the average loss for the previous batches.
             loss_mean = np.mean(loss_history)
 
+            if hasattr(self, "ewc_loss_fisher_part"):
+                fisher_loss = self.session.run(self.ewc_loss_fisher_part, feed_dict=feed_dict)
+            else:
+                fisher_loss = 0
             # Print status.
             pct_epoch = t / iterations_per_epoch
-            msg = "\tIteration: {0} ({1:.2f} epoch), Batch loss: {2:.4f}, Mean loss: {3:.4f}"
-            msg = msg.format(t, pct_epoch, loss_val, loss_mean)
+            msg = "\tIteration: {0} ({1:.2f} epoch), Batch loss: {2:.4f}, Mean loss: {3:.4f}, Fisher Loss: {4:.4f}, Q Loss: {5:.4f}"
+            msg = msg.format(t, pct_epoch, loss_val, loss_mean, fisher_loss, loss_normal)
             print_progress(msg)
 
             if t > min_iterations and loss_mean < loss_limit:
                 break
 
             self.last_t += 1
+        # New line
+        print()
 
         # fisher_v = tf.Variable(initial_value=self.fisher, dtype=tf.float32)
         #self.session.run(tf.assign(self.fisher_tensor, self.fisher, validate_shape=False))
@@ -1905,7 +1907,7 @@ class Agent:
         for game in self.games:
             self.env = gym.make(game)
             # Restore learned biases for this game
-            self.model.restore_bias(game)
+            #self.model.restore_bias(game)
             # Update model for valid actions
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
