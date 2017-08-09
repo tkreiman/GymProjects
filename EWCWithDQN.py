@@ -5,6 +5,10 @@ Created on Tue Jul 11 14:28:14 2017
 
 @author: tobykreiman
 """
+
+# Parts of this program written by:
+# Copyright (c) 2017 by Magnus Erik Hvass Pedersen
+
 ########################################################################
 # This program implements a variant of Reinforcement Learning known as
 # Q-learning. Imagine that we have an agent that must take actions in
@@ -367,9 +371,6 @@ def print_progress(msg):
 # from the game-environment. We will just convert the game-images to
 # gray-scale and resize them to roughly half their size. This is mainly
 # so we can save memory-space in the Replay Memory further below.
-# The original DeepMind paper used game-states consisting of 4 frames of
-# game-images that were gray-scaled, resized to 110 x 84 pixels, and then
-# cropped to 84 x 84 pixels because their implementation only supported this.
 
 # Height of each image-frame in the state.
 state_height = 105
@@ -1039,9 +1040,6 @@ class NeuralNetwork:
         self.action_indices_placeholder = tf.placeholder(dtype=tf.int32, shape=[None, 1])
         self.action_indices = action_indices
 
-        # Whether to use the PrettyTensor API (True) or tf.layers (False).
-        self.use_pretty_tensor = use_pretty_tensor
-
         # Replay-memory used for sampling random batches.
         self.replay_memory = replay_memory
 
@@ -1091,7 +1089,6 @@ class NeuralNetwork:
         # Init for weights
         init = tf.truncated_normal_initializer(mean=0.0, stddev=2e-2)
         self.bias_init = tf.constant_initializer(0)
-        self.use_pretty_tensor = False
 
         # This builds the Neural Network using the tf.layers API,
         # Padding used for the convolutional layers.
@@ -1163,6 +1160,7 @@ class NeuralNetwork:
         # Optimizer used for minimizing the loss-function.
         # Note the learning-rate is a placeholder variable so we can
         # lower the learning-rate as optimization progresses.
+        # NOTE: Not currently used with EWCLearning, Adam used instead
         self.rmsprop = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
         self.optimizer = self.rmsprop.minimize(self.loss)
 
@@ -1173,6 +1171,7 @@ class NeuralNetwork:
         self.session = tf.Session()
 
         # Make dictionary to remember biases specific to each game
+        # Equation S34
         self.bias_history = {}
 
         layer_names = ["layer_conv1", "layer_conv2", "layer_conv3", "layer_fc1", "layer_fc2", "layer_fc3", "layer_fc4", "layer_fc_out"]
@@ -1188,7 +1187,7 @@ class NeuralNetwork:
         self.epsilon = 1e-8
         self.adam = tf.train.AdamOptimizer(self.learning_rate, self.beta1, self.beta2, self.epsilon)
         self.adam_train_step = self.adam.minimize(self.ewc_loss)
-        # TODO
+
         # Make last_m, and last_v an array with same len as self.var_list
         self.last_m = []
         self.last_v = []
@@ -1587,8 +1586,8 @@ class Agent:
         :param use_logging:
             Boolean whether to use logging to text-files during training.
         """
-        # self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
-        self.games = ["Breakout-v0", "Atlantis-v0"]
+        # Games to play
+        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
@@ -1733,14 +1732,16 @@ class Agent:
             # Set up new environment
             game = self.games[i]
             self.env = gym.make(game)
+            # Reset memory
             self.replay_memory.reset()
+            # Reset model
             self.model.restore()
             self.model.last_t = 1
             self.epsilon_greedy.num_actions = self.env.action_space.n
             # Update ewc loss
             if i > 0:
                 self.model.compute_fisher()
-                self.model.update_ewc_loss(15)
+                self.model.update_ewc_loss(300)
 
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
@@ -1837,7 +1838,7 @@ class Agent:
         for game in self.games:
             self.env = gym.make(game)
             # Restore learned biases for this game
-            #self.model.restore_bias(game)
+            self.model.restore_bias(game)
             # Update model for valid actions
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
