@@ -1036,6 +1036,8 @@ class NeuralNetwork:
             built into TensorFlow.
         """
 
+        self.use_pretty_tensor = False
+
         # Set valid action indices
         self.action_indices_placeholder = tf.placeholder(dtype=tf.int32, shape=[None, 1])
         self.action_indices = action_indices
