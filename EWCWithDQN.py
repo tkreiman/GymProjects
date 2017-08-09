@@ -530,10 +530,7 @@ class ReplayMemory:
         :param discount_factor:
             Discount-factor used for updating Q-values.
         """
-        # Estimation errors for the Q-values. This is used to balance
-        # the sampling of batches for training the Neural Network,
-        # so we get a balanced combination of states with high and low
-        # estimation errors for their Q-values.
+        # Estimation errors for the Q-values.
         self.estimation_errors = np.zeros(shape=size, dtype=np.float)
 
         # Capacity of the replay-memory as the number of states.
@@ -1026,7 +1023,7 @@ class NeuralNetwork:
     better at estimating the Q-values.
     """
 
-    def __init__(self, num_actions, replay_memory, action_indices, use_pretty_tensor=False):
+    def __init__(self, num_actions, replay_memory, action_indices, use_pretty_tensor=False, load_checkpoint=False):
         """
         :param num_actions:
             Number of discrete actions for the game-environment.
@@ -1091,148 +1088,77 @@ class NeuralNetwork:
                                           trainable=False, dtype=tf.float32,
                                           name='fisher')
 
-        # The Neural Network will be constructed in the following.
-        # Note that the architecture of this Neural Network is very
-        # different from that used in the original DeepMind papers,
-        # which was something like this:
-        # Input image:      84 x 84 x 4 (4 gray-scale images of 84 x 84 pixels).
-        # Conv layer 1:     16 filters 8 x 8, stride 4, relu.
-        # Conv layer 2:     32 filters 4 x 4, stride 2, relu.
-        # Fully-conn. 1:    256 units, relu. (Sometimes 512 units).
-        # Fully-conn. 2:    num-action units, linear.
-
-        # The DeepMind architecture does a very aggressive downsampling of
-        # the input images so they are about 10 x 10 pixels after the final
-        # convolutional layer. I found that this resulted in significantly
-        # distorted Q-values when using the training method further below.
-        # The reason DeepMind could get it working was perhaps that they
-        # used a very large replay memory (5x as big as here), and a single
-        # optimization iteration was performed after each step of the game,
-        # and some more tricks.
-
-        # Initializer for the layers in the Neural Network.
-        # If you change the architecture of the network, particularly
-        # if you add or remove layers, then you may have to change
-        # the stddev-parameter here. The initial weights must result
-        # in the Neural Network outputting Q-values that are very close
-        # to zero - but the network weights must not be too low either
-        # because it will make it hard to train the network.
-        # You can experiment with values between 1e-2 and 1e-3.
+        # Init for weights
         init = tf.truncated_normal_initializer(mean=0.0, stddev=2e-2)
         self.bias_init = tf.constant_initializer(0)
         self.use_pretty_tensor = False
-        if self.use_pretty_tensor:
-            # This builds the Neural Network using the PrettyTensor API,
-            # which is a very elegant builder API, but some people are
-            # having problems installing and using it.
 
-            import prettytensor as pt
+        # This builds the Neural Network using the tf.layers API,
+        # Padding used for the convolutional layers.
+        padding = 'SAME'
 
-            # Wrap the input to the Neural Network in a PrettyTensor object.
-            x_pretty = pt.wrap(self.x)
+        # Activation function for all convolutional and fully-connected
+        # layers, except the last.
+        activation = tf.nn.relu
 
-            # Create the convolutional Neural Network using Pretty Tensor.
-            with pt.defaults_scope(activation_fn=tf.nn.relu):
-                self.q_values = x_pretty. \
-                    conv2d(kernel=3, depth=16, stride=2, name='layer_conv1', weights=init). \
-                    conv2d(kernel=3, depth=32, stride=2, name='layer_conv2', weights=init). \
-                    conv2d(kernel=3, depth=64, stride=1, name='layer_conv3', weights=init). \
-                    flatten(). \
-                    fully_connected(size=1024, name='layer_fc1', weights=init). \
-                    fully_connected(size=1024, name='layer_fc2', weights=init). \
-                    fully_connected(size=1024, name='layer_fc3', weights=init). \
-                    fully_connected(size=1024, name='layer_fc4', weights=init). \
-                    fully_connected(size=num_actions, name='layer_fc_out', weights=init,
-                                    activation_fn=None)
+        # Reference to the lastly added layer of the Neural Network.
+        # This makes it easy to add or remove layers.
+        net = self.x
 
-            # Loss-function which must be optimized. This is the mean-squared
-            # error between the Q-values that are output by the Neural Network
-            # and the target Q-values.
-            self.loss = self.q_values.l2_regression(target=self.q_values_new)
-        else:
-            # This builds the Neural Network using the tf.layers API,
-            # which is very verbose and inelegant, but should work for everyone.
+        # First convolutional layer.
+        net = tf.layers.conv2d(inputs=net, name='layer_conv1',
+                               filters=16, kernel_size=3, strides=2,
+                               padding=padding,
+                               kernel_initializer=init, activation=activation)
 
-            # Note that the checkpoints for Tutorial #16 which can be
-            # downloaded from the internet only support PrettyTensor.
-            # Although the Neural Networks appear to be identical when
-            # built using the PrettyTensor and tf.layers APIs,
-            # they actually create somewhat different TensorFlow graphs
-            # where the variables have different names, which means the
-            # checkpoints are incompatible for the two builder APIs.
+        # Second convolutional layer.
+        net = tf.layers.conv2d(inputs=net, name='layer_conv2',
+                               filters=32, kernel_size=3, strides=2,
+                               padding=padding,
+                               kernel_initializer=init, activation=activation)
 
-            # Padding used for the convolutional layers.
-            padding = 'SAME'
+        # Third convolutional layer.
+        net = tf.layers.conv2d(inputs=net, name='layer_conv3',
+                               filters=64, kernel_size=3, strides=1,
+                               padding=padding,
+                               kernel_initializer=init, activation=activation)
 
-            # Activation function for all convolutional and fully-connected
-            # layers, except the last.
-            activation = tf.nn.relu
+        # Flatten output of the last convolutional layer so it can
+        # be input to a fully-connected (aka. dense) layer.
+        net = tf.contrib.layers.flatten(net)
 
-            # Reference to the lastly added layer of the Neural Network.
-            # This makes it easy to add or remove layers.
-            net = self.x
+        # First fully-connected (aka. dense) layer.
+        net = tf.layers.dense(inputs=net, name='layer_fc1', units=1024,
+                              kernel_initializer=init, activation=activation)
 
-            # First convolutional layer.
-            net = tf.layers.conv2d(inputs=net, name='layer_conv1',
-                                   filters=16, kernel_size=3, strides=2,
-                                   padding=padding,
-                                   kernel_initializer=init, activation=activation)
+        # Second fully-connected layer.
+        net = tf.layers.dense(inputs=net, name='layer_fc2', units=1024,
+                              kernel_initializer=init, activation=activation)
 
-            # Second convolutional layer.
-            net = tf.layers.conv2d(inputs=net, name='layer_conv2',
-                                   filters=32, kernel_size=3, strides=2,
-                                   padding=padding,
-                                   kernel_initializer=init, activation=activation)
+        # Third fully-connected layer.
+        net = tf.layers.dense(inputs=net, name='layer_fc3', units=1024,
+                              kernel_initializer=init, activation=activation)
 
-            # Third convolutional layer.
-            net = tf.layers.conv2d(inputs=net, name='layer_conv3',
-                                   filters=64, kernel_size=3, strides=1,
-                                   padding=padding,
-                                   kernel_initializer=init, activation=activation)
+        # Fourth fully-connected layer.
+        net = tf.layers.dense(inputs=net, name='layer_fc4', units=1024,
+                              kernel_initializer=init, activation=activation)
 
-            # Flatten output of the last convolutional layer so it can
-            # be input to a fully-connected (aka. dense) layer.
-            # TODO: For some bizarre reason, this function is not yet in tf.layers
-            # TODO: net = tf.layers.flatten(net)
-            net = tf.contrib.layers.flatten(net)
+        # Final fully-connected layer.
+        net = tf.layers.dense(inputs=net, name='layer_fc_out', units=num_actions,
+                              kernel_initializer=init, activation=None)
 
-            # First fully-connected (aka. dense) layer.
-            net = tf.layers.dense(inputs=net, name='layer_fc1', units=1024,
-                                  kernel_initializer=init, activation=activation)
-
-            # Second fully-connected layer.
-            net = tf.layers.dense(inputs=net, name='layer_fc2', units=1024,
-                                  kernel_initializer=init, activation=activation)
-
-            # Third fully-connected layer.
-            net = tf.layers.dense(inputs=net, name='layer_fc3', units=1024,
-                                  kernel_initializer=init, activation=activation)
-
-            # Fourth fully-connected layer.
-            net = tf.layers.dense(inputs=net, name='layer_fc4', units=1024,
-                                  kernel_initializer=init, activation=activation)
-
-            # Final fully-connected layer.
-            net = tf.layers.dense(inputs=net, name='layer_fc_out', units=num_actions,
-                                  kernel_initializer=init, activation=None)
+        # Ignore invalid actions for the current game
+        net = tf.transpose(tf.gather_nd(tf.transpose(net), self.action_indices_placeholder))
+        # The output of the Neural Network is the estimated Q-values
+        # for each possible action in the game-environment.
+        self.q_values = net
 
 
-            net = tf.transpose(tf.gather_nd(tf.transpose(net), self.action_indices_placeholder))
-            # The output of the Neural Network is the estimated Q-values
-            # for each possible action in the game-environment.
-            self.q_values = net
-
-            # TensorFlow has a built-in loss-function for doing regression:
-            # self.loss = tf.nn.l2_loss(self.q_values - self.q_values_new)
-            # But it uses tf.reduce_sum() rather than tf.reduce_mean()
-            # which is used by PrettyTensor. This means the scale of the
-            # gradient is different and hence the hyper-parameters
-            # would have to be re-tuned. So instead we calculate the
-            # L2-loss similarly to how it is done in PrettyTensor.
-            squared_error = tf.square(self.q_values - self.q_values_new)
-            sum_squared_error = tf.reduce_sum(squared_error, axis=1)
-            self.loss = tf.reduce_mean(sum_squared_error)
-            self.ewc_loss = self.loss
+        # L2-loss
+        squared_error = tf.square(self.q_values - self.q_values_new)
+        sum_squared_error = tf.reduce_sum(squared_error, axis=1)
+        self.loss = tf.reduce_mean(sum_squared_error)
+        self.ewc_loss = self.loss
 
         # Optimizer used for minimizing the loss-function.
         # Note the learning-rate is a placeholder variable so we can
@@ -1277,7 +1203,11 @@ class NeuralNetwork:
 
         # Load the most recent checkpoint if it exists,
         # otherwise initialize all the variables in the TensorFlow graph.
-        self.load_checkpoint()
+        if load_checkpoint:
+            self.load_checkpoint()
+        else:
+            self.session.run(tf.global_variables_initializer())
+
 
     def close(self):
         """Close the TensorFlow session."""
@@ -1300,7 +1230,7 @@ class NeuralNetwork:
             self.ewc_loss += (lam / 2) * tf.reduce_sum(
                 tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
         # Update the optimizer
-        self.optimizer = self.rmsprop.minimize(self.ewc_loss)
+        self.adam_train_step = self.adam.minimize(self.ewc_loss)
 
     def save_optimal_weights(self):
         # used for saving optimal weights after most recent task training
@@ -1952,17 +1882,17 @@ class Agent:
         print(mean_rewards, self.games)
 
     def train_ewc_multiple(self, episodes_per_game, states_per_game, num_environments):
-        for i in range(0, len(self.games)):
-            # Set up new environment
-            game = self.games[i]
+        for g in range(0, len(self.games)):
+            # Set up new environments
+            game = self.games[g]
             self.env = gym.make(game)
-            environments = [gym.make(game) for i in range(num_environments)]
+            environments = [gym.make(game) for _ in range(num_environments)]
             self.replay_memory.reset()
             self.model.restore()
             self.model.last_t = 1
             self.epsilon_greedy.num_actions = self.env.action_space.n
             # Update ewc loss
-            if i > 0:
+            if g > 0:
                 self.model.compute_fisher()
                 self.model.update_ewc_loss(15)
 
@@ -1973,7 +1903,6 @@ class Agent:
             episodes = 0
             num_states = 0
             end_episode = True
-            end_episodes = np.full([num_environments], False)
             reward_history = []
             while episodes <= episodes_per_game and num_states <= states_per_game:
                 if end_episode:
@@ -1982,34 +1911,51 @@ class Agent:
                     # Reset values
                     motion_tracers = [MotionTracer(imgs[i]) for i in range(num_environments)]
                     reward_episodes = np.zeros(num_environments)
-                    episodes_total = self.model.increase_count_episodes()
-                    episodes += 1
+                    # Make empty array for number of lives
                     num_lives = np.full([num_environments], self.get_lives())
+                    # Reset the end episodes
+                    end_episode = False
+                    end_episodes = np.full([num_environments], False)
 
                 # Get state from game
                 states = [motion_tracers[i].get_state() for i in range(num_environments)]
                 # Get q values
-                q_values = self.model.get_q_values([states])
+                q_values = self.model.get_q_values(states)
                 # Determine action based on epsilon greedy
                 # action = self.get_action(q_values, num_states)
-                action, epsilon = self.epsilon_greedy.get_action(q_values=q_values, iteration=num_states, training=self.training)
-                # Act the action and get result
-                img, reward, end_episode, info = self.env.step(action)
-                # Process state
-                motion_tracer.process(img)
-                # Add reward
-                reward_episode += reward
-                # Determine if a life was lost in this step.
-                num_lives_new = self.get_lives()
-                end_life = (num_lives_new < num_lives)
-                num_lives = num_lives_new
-                # Increase count states
-                num_states += 1
+                for i in range(num_environments):
+                    if end_episodes[i]:
+                        continue
+                    action, epsilon = self.epsilon_greedy.get_action(q_values=q_values[i], iteration=num_states, training=self.training)
+                    # Act the action and get result
+                    img, reward, end, info = environments[i].step(action)
+                    end_episodes[i] = end
+                    # Process state
+                    motion_tracers[i].process(img)
+                    # Add reward
+                    reward_episodes[i] += reward
+                    # Determine if a life was lost in this step.
+                    num_lives_new = self.lives(environments[i])
+                    end_life = (num_lives_new < num_lives[i])
+                    num_lives[i] = num_lives_new
+                    # Increase count states
+                    num_states += 1
+
+                    if self.training:
+                        self.replay_memory.add(state=states[i], q_values=q_values[i], action=action, reward=reward,
+                                               end_life=end_life, end_episode=end)
+                    if end:
+                        reward_history.append(reward_episodes[i])
+                        if len(reward_history) == 0:
+                            reward_mean = 0
+                        else:
+                            reward_mean = np.mean(reward_history[-30:])
+                        # Print information about episode
+                        print(str(episodes) + ":" + str(num_states), "Game:", game, "Epsilon:", round(epsilon, 2),
+                              "Reward:", reward_episodes[i], "Mean Reward:", round(reward_mean, 1))
+                        episodes += 1
 
                 if self.training:
-                    self.replay_memory.add(state=state, q_values=q_values, action=action, reward=reward,
-                                           end_life=end_life, end_episode=end_episode)
-
                     # How much of the replay-memory should be used.
                     use_fraction = self.replay_fraction.get_value(iteration=num_states)
 
@@ -2032,23 +1978,18 @@ class Agent:
                         # just gathered, so we will have to fill the replay-memory again.
                         self.replay_memory.reset()
 
-                if end_episode:
-                    reward_history.append(reward_episode)
-
-                if len(reward_history) == 0:
-                    reward_mean = 0
-                else:
-                    reward_mean = np.mean(reward_history[-30:])
-
-                if self.training and end_episode:
-                    #msg = "{0:4}:{1}\t Game: {2:4.2f}\t Reward: {3:.1f}\t Episode Mean: {4:.1f}"
-                    eps = self.epsilon_greedy.get_epsilon(num_states, self.training)
-                    print(str(episodes) + ":" + str(num_states), "Game:", game, "Epsilon:", round(eps, 2), "Reward:", reward_episode, "Mean Reward:", round(reward_mean, 1))
+                # All environments have finished so they will all be reset on the next loop through
+                if np.sum(end_episodes) == num_environments:
+                    end_episode = True
 
             # input_set, _ = self.replay_memory.random_batch()
             # self.model.compute_fisher(input_set, num_samples=200)
             self.model.save_biases(game)
             self.model.save_optimal_weights()
+
+        print()
+        print("Testing games!")
+        self.test_on_ewc_games(40)
 
 
 
@@ -2244,6 +2185,10 @@ if __name__ == '__main__':
                         dest='training', action='store_true',
                         help="train the agent (otherwise test the agent)")
 
+    parser.add_argument("--multiple_env", required=False,
+                        dest='multiple_env', action='store_true',
+                        help="train the agent with multiple environments at the same time")
+
     parser.add_argument("--render", required=False,
                         dest='render', action='store_true',
                         help="render game-output to screen")
@@ -2271,6 +2216,7 @@ if __name__ == '__main__':
     checkpoint_base_dir = args.dir
     eps_per_game = args.eps_per_game
     states_per_game = args.states_per_game
+    multiple_env = args.multiple_env
 
     # Update all the file-paths after the base-dir has been set.
     update_paths(env_name=env_name)
@@ -2282,7 +2228,10 @@ if __name__ == '__main__':
 
     # Run the agent
     #agent.run(num_episodes=num_episodes)
-    agent.train_ewc(eps_per_game, states_per_game)
+    if multiple_env:
+        agent.train_ewc_multiple(eps_per_game, states_per_game, 10)
+    else:
+        agent.train_ewc(eps_per_game, states_per_game)
 
     # Print statistics.
     rewards = agent.episode_rewards
