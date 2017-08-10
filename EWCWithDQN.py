@@ -571,6 +571,8 @@ class ReplayMemory:
         # Whether the episode had ended (aka. game over) in each state.
         self.end_episode = np.zeros(shape=self.size, dtype=np.bool)
 
+        self.estimation_errors = np.zeros(shape=size, dtype=np.float)
+
     def is_full(self):
         """Return boolean whether the replay-memory is full."""
         return self.num_used == self.size
@@ -733,18 +735,19 @@ class ReplayMemory:
 
         # Random index of states and Q-values in the replay-memory.
         # These have LOW estimation errors for the Q-values.
-        idx_lo = np.random.choice(self.idx_err_lo,
-                                  size=self.num_samples_err_lo,
-                                  replace=False)
+        # idx_lo = np.random.choice(self.idx_err_lo,
+        #                          size=self.num_samples_err_lo,
+        #                         replace=False)
 
         # Random index of states and Q-values in the replay-memory.
         # These have HIGH estimation errors for the Q-values.
-        idx_hi = np.random.choice(self.idx_err_hi,
-                                  size=self.num_samples_err_hi,
-                                  replace=False)
+        # idx_hi = np.random.choice(self.idx_err_hi,
+        #                          size=self.num_samples_err_hi,
+        #                         replace=False)
 
         # Combine the indices.
-        idx = np.concatenate((idx_lo, idx_hi))
+        #idx = np.concatenate((idx_lo, idx_hi))
+        idx = np.random.choice(np.arange(self.num_used), 128, replace=False)
 
         # Get the batches of states and Q-values.
         states_batch = self.states[idx]
@@ -1305,7 +1308,7 @@ class NeuralNetwork:
 
     def optimize_adam(self, learning_rate, batch_size=128, max_epochs=10.0, min_epochs=1.0, loss_limit=0.015):
 
-        self.replay_memory.prepare_sampling_prob(batch_size=batch_size)
+        # self.replay_memory.prepare_sampling_prob(batch_size=batch_size)
 
         iterations_per_epoch = self.replay_memory.num_used / batch_size
 
