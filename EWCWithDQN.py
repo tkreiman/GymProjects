@@ -127,6 +127,17 @@ Created on Tue Jul 11 14:28:14 2017
 #
 ########################################################################
 
+
+############################################
+# Reference papers
+
+# [1] Mnih, Volodymyr, et al. “Human-Level Control through Deep Reinforcement Learning.”Nature, vol. 518, no. 7540, 2015, pp. 529–533., doi:10.1038/nature14236.
+# [2] Sasaki, “Note on Fisher Information Matrix and Machine Learning.” 2017
+# [3] Kirkpatrick, et al. “Overcoming catastrophic forgetting in neural networks.” PNAS 2017
+# [4] Kingma and Ba, “ADAM: A Method For Stochastic Optimization.” 2017
+############################################
+
+
 import numpy as np
 import tensorflow as tf
 import gym
@@ -669,6 +680,7 @@ class ReplayMemory:
                 # the following state and take the maximum, because we will
                 # generally take the action that has the highest Q-value.
                 # valid_q = self.q_values[k + 1][valid_actions]
+                # Reference [1] equation in algorithm 1
                 action_value = reward + self.discount_factor * np.max(self.q_values[k + 1])
 
             # Error of the Q-value that was estimated using the Neural Network.
@@ -1176,7 +1188,7 @@ class NeuralNetwork:
         self.session = tf.Session()
 
         # Make dictionary to remember biases specific to each game
-        # Equation S34
+        # Reference [3] equation S34
         self.bias_history = {}
 
         layer_names = ["layer_conv1", "layer_conv2", "layer_conv3", "layer_fc1", "layer_fc2", "layer_fc3", "layer_fc4", "layer_fc_out"]
@@ -1221,6 +1233,7 @@ class NeuralNetwork:
         for var in range(len(self.var_list)):
             # Update fisher information matrix for each variable
             v = self.adam.get_slot(self.var_list[var], "v")
+            # Reference [2] equation 62, 63
             self.fisher[var] = v / (1 - self.beta2 ** self.last_t)
 
     def update_ewc_loss(self, lam):
@@ -1231,6 +1244,7 @@ class NeuralNetwork:
         for v in range(len(self.var_list)):
             # Update ewc loss using the fisher matrix
             self.ewc_loss_fisher_part = (lam / 2) * tf.reduce_sum(tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
+            # Reference [3] equation 3
             self.ewc_loss += (lam / 2) * tf.reduce_sum(
                 tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
         # Update the optimizer
@@ -1593,7 +1607,7 @@ class Agent:
         """
         # Games to play
         # self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
-        self.games = ["Breakout-v0", "Atlantis-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
@@ -1844,6 +1858,7 @@ class Agent:
         for game in self.games:
             self.env = gym.make(game)
             # Restore learned biases for this game
+            self.model.restore()
             self.model.restore_bias(game)
             # Update model for valid actions
             self.action_names = self.env.unwrapped.get_action_meanings()
