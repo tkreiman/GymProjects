@@ -571,7 +571,7 @@ class ReplayMemory:
         # Whether the episode had ended (aka. game over) in each state.
         self.end_episode = np.zeros(shape=self.size, dtype=np.bool)
 
-        self.estimation_errors = np.zeros(shape=size, dtype=np.float)
+        self.estimation_errors = np.zeros(shape=self.size, dtype=np.float)
 
     def is_full(self):
         """Return boolean whether the replay-memory is full."""
