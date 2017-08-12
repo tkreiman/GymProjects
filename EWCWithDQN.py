@@ -1360,7 +1360,10 @@ class NeuralNetwork:
             loss_mean = np.mean(loss_history)
 
             if hasattr(self, "ewc_loss_fisher_part"):
-                fisher_loss = self.session.run(self.ewc_loss_fisher_part, feed_dict=feed_dict)
+                if self.ewc_loss_fisher_part != 0:
+                    fisher_loss = self.session.run(self.ewc_loss_fisher_part, feed_dict=feed_dict)
+                else:
+                    fisher_loss = 0
             else:
                 fisher_loss = 0
             # Print status.
