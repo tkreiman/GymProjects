@@ -1208,6 +1208,7 @@ class NeuralNetwork:
         # Make last_m, and last_v an array with same len as self.var_list
         self.last_m = []
         self.last_v = []
+        self.ewc_loss_fisher_part = 0
         for v in self.var_list:
             self.last_m.append(np.zeros(np.shape(v)))
             self.last_v.append(np.zeros(np.shape(v)))
@@ -1243,7 +1244,7 @@ class NeuralNetwork:
 
         for v in range(len(self.var_list)):
             # Update ewc loss using the fisher matrix
-            self.ewc_loss_fisher_part = (lam / 2) * tf.reduce_sum(tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
+            self.ewc_loss_fisher_part += (lam / 2) * tf.reduce_sum(tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
             # Reference [3] equation 3
             self.ewc_loss += (lam / 2) * tf.reduce_sum(
                 tf.multiply(self.fisher[v], tf.square(self.var_list[v] - self.star_vars[v])))
@@ -1607,7 +1608,7 @@ class Agent:
         """
         # Games to play
         # self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
-        self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
