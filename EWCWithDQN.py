@@ -1765,7 +1765,7 @@ class Agent:
             # Update ewc loss
             if i > 0:
                 self.model.compute_fisher()
-                self.model.update_ewc_loss(10)
+                self.model.update_ewc_loss(20)
 
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
