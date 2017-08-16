@@ -1611,7 +1611,7 @@ class Agent:
         """
         # Games to play
         # self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
-        self.games = ["Breakout-v0", "Atlantis-v0"]
+        self.games = ["Atlantis-v0", "Breakout-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
@@ -1765,7 +1765,7 @@ class Agent:
             # Update ewc loss
             if i > 0:
                 self.model.compute_fisher()
-                self.model.update_ewc_loss(20)
+                self.model.update_ewc_loss(15)
 
             self.action_names = self.env.unwrapped.get_action_meanings()
             self.model.action_indices = self.valid_actions()
