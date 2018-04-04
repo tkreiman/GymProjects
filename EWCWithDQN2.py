@@ -1209,8 +1209,8 @@ class NeuralNetwork:
         for i in range(len(self.var_list)):
             # Change this number to freeze a different layer. Number corresponds
             # to index in array above called layer_names
-            if i == 3:
-                self.frozen_layer = layer_names[3]
+            if i == 6:
+                self.frozen_layer = layer_names[6]
                 continue
             self.trimmed_var_list.append(self.var_list[i])
 
