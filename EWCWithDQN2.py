@@ -1205,14 +1205,15 @@ class NeuralNetwork:
         self.adam = tf.train.AdamOptimizer(self.learning_rate, self.beta1, self.beta2, self.epsilon)
         self.adam_train_step = self.adam.minimize(self.ewc_loss)
 
-        self.trimmed_var_list = []
-        for i in range(len(self.var_list)):
+        self.trimmed_var_list = self.var_list
+        #self.trimmed_var_list = []
+        #for i in range(len(self.var_list)):
             # Change this number to freeze a different layer. Number corresponds
             # to index in array above called layer_names
-            if i == 6:
-                self.frozen_layer = layer_names[6]
-                continue
-            self.trimmed_var_list.append(self.var_list[i])
+         #   if i == 6:
+          #      self.frozen_layer = layer_names[6]
+           #     continue
+            #self.trimmed_var_list.append(self.var_list[i])
 
         self.adam2 = tf.train.AdamOptimizer(self.learning_rate, self.beta1, self.beta2, self.epsilon)
         self.adam2_train_step = self.adam2.minimize(self.ewc_loss, var_list=self.trimmed_var_list)
@@ -1628,7 +1629,7 @@ class Agent:
         """
         # Games to play
         # self.games = ["Breakout-v0", "Atlantis-v0", "Robotank-v0", "CrazyClimber-v0", "Gopher-v0"]
-        self.games = ["Breakout-v0", "Atlantis-v0"]
+        self.games = ["Breakout-v0", "Atlantis-v0", "Breakout-v0"]
         self.all_action_names = ['NOOP', 'FIRE', 'UP', 'RIGHT', 'LEFT', 'DOWN', 'UPRIGHT', 'UPLEFT', 'DOWNRIGHT',
                                  'DOWNLEFT', 'UPFIRE', 'RIGHTFIRE', 'LEFTFIRE', 'DOWNFIRE', 'UPRIGHTFIRE', 'UPLEFTFIRE',
                                  'DOWNRIGHTFIRE', 'DOWNLEFTFIRE']
@@ -1784,7 +1785,7 @@ class Agent:
                 self.model.compute_fisher()
                 # self.model.update_ewc_loss(15)
                 self.model.train_step = self.model.adam2_train_step
-                self.model.print_frozen_layer()
+                #self.model.print_frozen_layer()
 
 
             self.action_names = self.env.unwrapped.get_action_meanings()
@@ -1874,7 +1875,7 @@ class Agent:
         print()
         print("Testing games!")
         self.test_on_ewc_games(40)
-        self.model.print_frozen_layer()
+        #self.model.print_frozen_layer()
 
     def test_on_ewc_games(self, eps_per_game):
         # Array to keep track of rewards in each game
